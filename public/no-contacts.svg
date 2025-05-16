@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+  <style>
+    .st0{fill:#E6E6E6;}
+    .st1{fill:#CCCCCC;}
+    .st2{fill:#F2F2F2;}
+    .st3{fill:#00A884;}
+    .st4{fill:#FFFFFF;}
+  </style>
+  
+  <!-- Background circle -->
+  <circle class="st0" cx="100" cy="100" r="90" />
+  
+  <!-- Address book -->
+  <rect class="st1" x="55" y="50" width="90" height="110" rx="5" />
+  <rect class="st2" x="60" y="55" width="80" height="100" rx="3" />
+  
+  <!-- Contact lines -->
+  <rect class="st1" x="70" y="75" width="60" height="5" rx="2" />
+  <rect class="st1" x="70" y="90" width="60" height="5" rx="2" />
+  <rect class="st1" x="70" y="105" width="60" height="5" rx="2" />
+  <rect class="st1" x="70" y="120" width="60" height="5" rx="2" />
+  
+  <!-- Magnifying glass -->
+  <circle class="st3" cx="130" cy="140" r="25" />
+  <circle class="st4" cx="130" cy="140" r="20" />
+  <circle class="st3" cx="130" cy="140" r="10" />
+  <rect class="st3" x="142" y="152" width="20" height="8" rx="4" transform="rotate(45 142 152)" />
+  
+  <!-- X mark -->
+  <line x1="85" y1="75" x2="115" y2="105" stroke="#FF6B6B" stroke-width="4" stroke-linecap="round" />
+  <line x1="115" y1="75" x2="85" y2="105" stroke="#FF6B6B" stroke-width="4" stroke-linecap="round" />
+</svg> 
