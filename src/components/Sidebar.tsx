@@ -16,15 +16,24 @@ import VerticalMenu from './VerticalMenu';
 interface SidebarProps {
   onOpenSettings: () => void;
   onChatSelect: () => void;
+  onCampaignSelect?: (campaign: { id: string; name: string; contacts: Contact[] }) => void;
+  onTabChange?: (tab: string) => void;
+  activeTab?: string;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings, onChatSelect }) => {
+const Sidebar: React.FC<SidebarProps> = ({ 
+  onOpenSettings, 
+  onChatSelect, 
+  onCampaignSelect, 
+  onTabChange,
+  activeTab: externalActiveTab
+}) => {
   const { user, checkWhatsAppStatus } = useAuth();
   const { chats, activeChat, selectChat } = useChat();
   const { showToast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [showNewChatModal, setShowNewChatModal] = useState(false);
-  const [activeTab, setActiveTab] = useState('contacts');
+  const [activeTab, setActiveTab] = useState(externalActiveTab || 'contacts');
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [contactsLoading, setContactsLoading] = useState(false);
   const [contactsError, setContactsError] = useState<string | null>(null);
@@ -34,12 +43,17 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings, onChatSelect }) => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [initialContactCount, setInitialContactCount] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const excelFileInputRef = useRef<HTMLInputElement>(null);
+  const googleContactsRef = useRef<HTMLButtonElement>(null);
   const [showCreateCampaignModal, setShowCreateCampaignModal] = useState(false);
   const [campaignSearchQuery, setCampaignSearchQuery] = useState('');
   const [selectedCampaignContacts, setSelectedCampaignContacts] = useState<Contact[]>([]);
   const [campaignStep, setCampaignStep] = useState(1);
   const [campaignGroupName, setCampaignGroupName] = useState('');
-  const [campaigns, setCampaigns] = useState<{ name: string; contacts: Contact[] }[]>([]);
+  const [campaigns, setCampaigns] = useState<{ id: string; name: string; contacts: Contact[] }[]>([]);
+  const [activeCampaign, setActiveCampaign] = useState<string | null>(null);
+  const [showCampaignDeleteConfirm, setShowCampaignDeleteConfirm] = useState<string | null>(null);
+  const campaignClickTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Check WhatsApp status when component mounts - only once
   useEffect(() => {
@@ -65,6 +79,9 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings, onChatSelect }) => {
 
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
+    if (onTabChange) {
+      onTabChange(tab);
+    }
   };
 
   const filteredChats = chats.filter(chat => {
@@ -361,6 +378,140 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings, onChatSelect }) => {
 
   const filteredCampaignContacts = contacts.filter(c => getContactDisplayName(c).toLowerCase().includes(campaignSearchQuery.toLowerCase()) || (c.phone1Value && c.phone1Value.includes(campaignSearchQuery)));
 
+  // Function to handle campaign selection
+  const handleCampaignSelect = (campaignId: string) => {
+    setActiveCampaign(campaignId);
+    const selectedCampaign = campaigns.find(c => c.id === campaignId);
+    if (selectedCampaign && onCampaignSelect) {
+      console.log("Sending campaign to parent:", selectedCampaign); // Debug
+      onCampaignSelect(selectedCampaign);
+    }
+    // Only call onChatSelect if we're not using onCampaignSelect to avoid conflicts
+    if (!onCampaignSelect) {
+      onChatSelect(); // Notify parent component that a chat/campaign was selected
+    }
+  };
+
+  // Function to handle campaign double click for delete option
+  const handleCampaignClick = (campaignId: string) => {
+    if (campaignClickTimerRef.current) {
+      // Double click detected
+      clearTimeout(campaignClickTimerRef.current);
+      campaignClickTimerRef.current = null;
+      setShowCampaignDeleteConfirm(campaignId);
+    } else {
+      // First click, start timer
+      campaignClickTimerRef.current = setTimeout(() => {
+        // Single click action - select the campaign
+        console.log("Campaign clicked, ID:", campaignId);
+        setActiveCampaign(campaignId);
+        
+        // Find the full campaign object and pass it to parent
+        const selectedCampaign = campaigns.find(c => c.id === campaignId);
+        if (selectedCampaign && onCampaignSelect) {
+          console.log("Passing campaign to Main:", selectedCampaign);
+          onCampaignSelect(selectedCampaign);
+        } else {
+          console.log("Campaign not found or onCampaignSelect not provided");
+        }
+        
+        campaignClickTimerRef.current = null;
+      }, 300); // 300ms delay to detect double clicks
+    }
+  };
+
+  // Function to handle campaign delete
+  const handleDeleteCampaign = (campaignId: string) => {
+    setCampaigns(campaigns.filter(c => c.id !== campaignId));
+    if (activeCampaign === campaignId) {
+      setActiveCampaign(null);
+    }
+    setShowCampaignDeleteConfirm(null);
+  };
+
+  // Function to handle campaign delete cancel
+  const handleCancelDeleteCampaign = () => {
+    setShowCampaignDeleteConfirm(null);
+  };
+
+  // Add Google Import functionality
+  const handleGoogleImport = () => {
+    // Show toast explaining this feature
+    showToast('info', 'Starting Google Contacts import process...');
+    
+    // Open Google OAuth popup
+    // This is a mock implementation since we would need a real Google OAuth integration
+    const width = 500;
+    const height = 600;
+    const left = window.screen.width / 2 - width / 2;
+    const top = window.screen.height / 2 - height / 2;
+    
+    try {
+      window.open(
+        'https://accounts.google.com/o/oauth2/v2/auth?scope=https://www.googleapis.com/auth/contacts.readonly&response_type=code&redirect_uri=https://your-app-url.com/google-auth-callback',
+        'Google Contacts Authorization',
+        `width=${width},height=${height},left=${left},top=${top}`
+      );
+      
+      // In a real implementation, we would listen for the OAuth callback
+      // For now, we'll simulate success after a delay
+      setTimeout(() => {
+        // Adding mock contacts after "import" with proper Contact type
+        const mockGoogleContacts: Contact[] = [
+          { 
+            id: Date.now(), 
+            firstName: 'John', 
+            lastName: 'Google', 
+            middleName: '',
+            organizationName: 'Google Inc',
+            organizationTitle: 'Developer',
+            emailValue: 'john.google@example.com',
+            phone1Value: '+1234567890',
+            phone2Value: '',
+            phone3Value: '',
+            labels: 'google-import',
+            businessID: 1,
+            userID: 1,
+            isActive: true,
+            metaAddedBy: 'google-import',
+            metaUpdatedBy: 'google-import',
+            addedOn: new Date().toISOString(),
+            updatedOn: new Date().toISOString()
+          },
+          { 
+            id: Date.now() + 1, 
+            firstName: 'Jane', 
+            lastName: 'Gmail', 
+            middleName: '',
+            organizationName: 'Gmail',
+            organizationTitle: 'Designer',
+            emailValue: 'jane.gmail@example.com',
+            phone1Value: '+0987654321',
+            phone2Value: '',
+            phone3Value: '',
+            labels: 'google-import',
+            businessID: 1,
+            userID: 1,
+            isActive: true,
+            metaAddedBy: 'google-import',
+            metaUpdatedBy: 'google-import',
+            addedOn: new Date().toISOString(),
+            updatedOn: new Date().toISOString()
+          }
+        ];
+        
+        // Add new contacts to the list
+        setContacts(prev => [...mockGoogleContacts, ...prev]);
+        
+        // Show success message
+        showToast('success', '2 contacts imported from Google successfully!');
+      }, 2000);
+    } catch (error) {
+      console.error('Error opening Google auth window:', error);
+      showToast('error', 'Failed to connect to Google. Please try again.');
+    }
+  };
+
   const renderTabContent = () => {
     switch (activeTab) {
       case 'chat':
@@ -622,29 +773,95 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings, onChatSelect }) => {
         );
       case 'campaigns':
         return (
-          <div className="flex flex-col h-full text-gray-500 dark:text-gray-400 overflow-y-auto">
-            {campaigns.length === 0 ? (
-              <div className="flex h-full items-center justify-center">
-                <p>No campaigns created yet.</p>
+          <>
+            {/* Search bar */}
+            <div className="bg-white px-3 py-2 dark:bg-gray-900">
+              <div className="flex items-center rounded-lg bg-[#f0f2f5] px-3 py-1 dark:bg-gray-800">
+                <div className="flex items-center w-full">
+                  <button className="mr-2 text-[#54656f]">
+                    <FaSearch className="h-4 w-4" />
+                  </button>
+                  <input
+                    type="text"
+                    placeholder="Search Campaigns"
+                    className="w-full bg-transparent py-1 outline-none dark:text-white"
+                    value={campaignSearchQuery}
+                    onChange={(e) => setCampaignSearchQuery(e.target.value)}
+                  />
+                </div>
               </div>
-            ) : (
-              <ul className="p-4 space-y-4">
-                {campaigns.map((c, idx) => (
-                  <li key={idx} className="bg-[#2a3942] rounded-lg p-4">
-                    <div className="text-white font-semibold text-lg mb-1">{c.name}</div>
-                    <div className="text-gray-400 text-sm">{c.contacts.length} contact(s)</div>
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {c.contacts.map(contact => (
-                        <span key={contact.id} className="bg-[#075e54] text-white rounded-full px-3 py-1 text-xs">
-                          {getContactDisplayName(contact)}
-                        </span>
-                      ))}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+            </div>
+
+            {/* Campaigns list */}
+            <div className="overflow-y-auto flex-1">
+              {campaigns.length === 0 ? (
+                <div className="flex h-full items-center justify-center text-gray-500 dark:text-gray-400">
+                  <p>No campaigns created yet.</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-100 dark:divide-gray-800">
+                  {campaigns
+                    .filter(c => c.name.toLowerCase().includes(campaignSearchQuery.toLowerCase()))
+                    .map(campaign => (
+                      <div 
+                        key={campaign.id}
+                        className={`flex cursor-pointer items-center px-3 py-3 hover:bg-[#f0f2f5] dark:hover:bg-gray-800 ${
+                          activeCampaign === campaign.id ? 'bg-[#f0f2f5] dark:bg-gray-800' : ''
+                        }`}
+                        onClick={() => handleCampaignClick(campaign.id)}
+                      >
+                        <div className="mr-3">
+                          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#00a884] text-white dark:bg-[#00a884]">
+                            {campaign.name.charAt(0).toUpperCase()}
+                          </div>
+                        </div>
+                        
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <h3 className="font-semibold text-gray-900 dark:text-white truncate">
+                              {campaign.name}
+                            </h3>
+                          </div>
+                          
+                          <div className="flex items-center">
+                            <p className="text-sm text-gray-600 dark:text-gray-400 truncate">
+                              {campaign.contacts.length} contact(s)
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Delete Confirmation Popup */}
+                        {showCampaignDeleteConfirm === campaign.id && (
+                          <div className="absolute z-10 right-20 bg-white dark:bg-gray-800 shadow-md rounded-lg p-3 border border-gray-200 dark:border-gray-700">
+                            <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">Delete this campaign?</p>
+                            <div className="flex space-x-2">
+                              <button 
+                                className="px-3 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteCampaign(campaign.id);
+                                }}
+                              >
+                                Delete
+                              </button>
+                              <button 
+                                className="px-3 py-1 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs rounded hover:bg-gray-300 dark:hover:bg-gray-600"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCancelDeleteCampaign();
+                                }}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+          </>
         );
       case 'analytics':
         return (
@@ -667,6 +884,13 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings, onChatSelect }) => {
       default: return 'Chat';
     }
   };
+
+  // Update the component for new activeTab from props
+  useEffect(() => {
+    if (externalActiveTab && externalActiveTab !== activeTab) {
+      setActiveTab(externalActiveTab);
+    }
+  }, [externalActiveTab]);
 
   return (
     <div className="flex h-full">
@@ -693,22 +917,52 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings, onChatSelect }) => {
               </svg>
             </button>
           )}
+          {activeTab === 'contacts' && (
+            <div className="flex">
+              <button
+                ref={googleContactsRef}
+                className="ml-2 p-2 rounded-full bg-[#00a884] text-white hover:bg-[#008f6f] focus:outline-none focus:ring-2 focus:ring-[#00a884]"
+                title="Import Contacts with Google"
+                onClick={handleGoogleImport}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z" />
+                </svg>
+              </button>
+              <button
+                className="ml-2 p-2 rounded-full bg-[#00a884] text-white hover:bg-[#008f6f] focus:outline-none focus:ring-2 focus:ring-[#00a884]"
+                onClick={handleImportContacts}
+                title="Import Contacts with Excel"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM9 18.5 6.5 16l-1 1L9 20.5l6-6-1-1L9 18.5zM13 9V3.5L18.5 9H13z"/>
+                </svg>
+              </button>
+              <input
+                type="file"
+                ref={excelFileInputRef}
+                className="hidden"
+                accept=".csv,.xlsx,.xls"
+                onChange={handleFileSelect}
+              />
+            </div>
+          )}
         </div>
         
-        {/* Create Campaign Modal (placeholder) */}
+        {/* Create Campaign Modal */}
         {showCreateCampaignModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-            <div className="bg-[#222e35] rounded-xl shadow-2xl w-full max-w-sm p-0 overflow-hidden">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-0 overflow-hidden dark:bg-gray-800">
               {campaignStep === 1 ? (
                 <>
                   {/* Header */}
-                  <div className="px-6 pt-6 pb-2 border-b border-[#2a3942]">
-                    <h2 className="text-lg font-semibold text-white mb-2">New group</h2>
+                  <div className="px-6 pt-6 pb-2 border-b border-gray-200 dark:border-gray-700">
+                    <h2 className="text-lg font-semibold text-gray-800 dark:text-white mb-2">New Campaign</h2>
                     {/* Selected contacts chips */}
                     {selectedCampaignContacts.length > 0 && (
                       <div className="flex flex-wrap gap-2 mb-2">
                         {selectedCampaignContacts.map(contact => (
-                          <div key={contact.id} className="flex items-center bg-[#075e54] text-white rounded-full px-3 py-1 text-sm">
+                          <div key={contact.id} className="flex items-center bg-[#00a884] text-white rounded-full px-3 py-1 text-sm">
                             {getContactDisplayName(contact)}
                             <button
                               className="ml-2 text-white hover:text-red-400 focus:outline-none"
@@ -725,11 +979,11 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings, onChatSelect }) => {
                       <input
                         type="text"
                         placeholder="Search name or number"
-                        className="w-full rounded-md bg-[#2a3942] text-white placeholder-gray-400 px-4 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-[#00a884] border border-transparent focus:border-[#00a884]"
+                        className="w-full rounded-md bg-gray-100 text-gray-800 placeholder-gray-500 px-4 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-[#00a884] border border-transparent focus:border-[#00a884] dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
                         value={campaignSearchQuery}
                         onChange={e => setCampaignSearchQuery(e.target.value)}
                       />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4-4m0 0A7 7 0 104 4a7 7 0 0013 13z" />
                         </svg>
@@ -737,16 +991,16 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings, onChatSelect }) => {
                     </div>
                   </div>
                   {/* Contacts List */}
-                  <div className="max-h-96 overflow-y-auto bg-[#222e35] px-2 py-2">
+                  <div className="max-h-96 overflow-y-auto bg-white px-2 py-2 dark:bg-gray-800">
                     {filteredCampaignContacts.length === 0 ? (
-                      <div className="text-center text-gray-400 py-8">No contacts found</div>
+                      <div className="text-center text-gray-500 py-8 dark:text-gray-400">No contacts found</div>
                     ) : (
                       filteredCampaignContacts.map(contact => {
                         const isSelected = selectedCampaignContacts.some(c => c.id === contact.id);
                         return (
                           <div
                             key={contact.id}
-                            className={`flex items-center px-4 py-3 hover:bg-[#2a3942] rounded-lg cursor-pointer ${isSelected ? 'bg-[#2a3942]' : ''}`}
+                            className={`flex items-center px-4 py-3 hover:bg-gray-100 rounded-lg cursor-pointer dark:hover:bg-gray-700 ${isSelected ? 'bg-gray-100 dark:bg-gray-700' : ''}`}
                             onClick={() => {
                               if (isSelected) {
                                 setSelectedCampaignContacts(selectedCampaignContacts.filter(c => c.id !== contact.id));
@@ -755,12 +1009,12 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings, onChatSelect }) => {
                               }
                             }}
                           >
-                            <div className="flex-shrink-0 h-10 w-10 rounded-full bg-[#374045] flex items-center justify-center text-white font-bold mr-3">
+                            <div className="flex-shrink-0 h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center text-gray-700 font-bold mr-3 dark:bg-gray-600 dark:text-white">
                               {getContactDisplayName(contact).charAt(0).toUpperCase()}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <div className="text-white font-medium truncate">{getContactDisplayName(contact)}</div>
-                              <div className="text-xs text-gray-400 truncate">{contact.phone1Value || contact.emailValue || 'No contact info'}</div>
+                              <div className="text-gray-900 font-medium truncate dark:text-white">{getContactDisplayName(contact)}</div>
+                              <div className="text-xs text-gray-500 truncate dark:text-gray-400">{contact.phone1Value || contact.emailValue || 'No contact info'}</div>
                             </div>
                             <div className="ml-2">
                               {isSelected ? (
@@ -779,9 +1033,9 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings, onChatSelect }) => {
                     )}
                   </div>
                   {/* Footer Buttons */}
-                  <div className="flex justify-end gap-2 bg-[#222e35] px-6 py-4 border-t border-[#2a3942]">
+                  <div className="flex justify-end gap-2 bg-white px-6 py-4 border-t border-gray-200 dark:bg-gray-800 dark:border-gray-700">
                     <button
-                      className="px-4 py-2 bg-gray-700 text-gray-200 rounded hover:bg-gray-600"
+                      className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
                       onClick={() => { setShowCreateCampaignModal(false); setCampaignStep(1); setSelectedCampaignContacts([]); setCampaignGroupName(''); }}
                     >
                       Cancel
@@ -798,53 +1052,45 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings, onChatSelect }) => {
               ) : (
                 <>
                   {/* Group Details Step */}
-                  <div className="px-6 pt-6 pb-2 border-b border-[#2a3942]">
-                    <h2 className="text-lg font-semibold text-white mb-2">New group</h2>
+                  <div className="px-6 pt-6 pb-2 border-b border-gray-200 dark:border-gray-700">
+                    <h2 className="text-lg font-semibold text-gray-800 dark:text-white mb-2">New Campaign</h2>
                     {/* Selected contacts chips */}
                     {selectedCampaignContacts.length > 0 && (
                       <div className="flex flex-wrap gap-2 mb-2">
                         {selectedCampaignContacts.map(contact => (
-                          <div key={contact.id} className="flex items-center bg-[#075e54] text-white rounded-full px-3 py-1 text-sm">
+                          <div key={contact.id} className="flex items-center bg-[#00a884] text-white rounded-full px-3 py-1 text-sm">
                             {getContactDisplayName(contact)}
                           </div>
                         ))}
                       </div>
                     )}
                   </div>
-                  <div className="px-6 py-4">
-                    {/* Group icon placeholder */}
+                  <div className="px-6 py-4 bg-white dark:bg-gray-800">
+                    {/* Campaign icon placeholder */}
                     <div className="mb-4 flex items-center gap-3">
-                      <div className="h-12 w-12 rounded-full bg-[#2a3942] flex items-center justify-center text-gray-400 text-xl cursor-pointer border border-[#374045]">
+                      <div className="h-12 w-12 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 text-xl cursor-pointer border border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-400">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                         </svg>
                       </div>
-                      <span className="text-gray-400">Add group icon <span className="text-xs">(optional)</span></span>
+                      <span className="text-gray-500 dark:text-gray-400">Add campaign icon <span className="text-xs">(optional)</span></span>
                     </div>
-                    {/* Group name input */}
+                    {/* Campaign name input */}
                     <div className="mb-4">
-                      <label className="block text-gray-400 mb-1 text-sm">Provide a group name</label>
+                      <label className="block text-gray-600 mb-1 text-sm dark:text-gray-400">Provide a campaign name</label>
                       <input
                         type="text"
-                        className="w-full rounded-md bg-[#2a3942] text-white placeholder-gray-400 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#00a884] border border-transparent focus:border-[#00a884]"
-                        placeholder="Group name (optional)"
+                        className="w-full rounded-md bg-gray-100 text-gray-800 placeholder-gray-500 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#00a884] border border-transparent focus:border-[#00a884] dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
+                        placeholder="Campaign name"
                         value={campaignGroupName}
                         onChange={e => setCampaignGroupName(e.target.value)}
                       />
                     </div>
-                    {/* Disappearing messages placeholder */}
-                    <div className="mb-4">
-                      <label className="block text-gray-400 mb-1 text-sm">Disappearing messages</label>
-                      <select className="w-full rounded-md bg-[#2a3942] text-white px-4 py-2 border border-[#374045] focus:outline-none">
-                        <option value="off">Off</option>
-                      </select>
-                      <p className="text-xs text-gray-500 mt-1">All new messages in this chat will disappear after the selected duration.</p>
-                    </div>
                   </div>
                   {/* Footer Buttons */}
-                  <div className="flex justify-end gap-2 bg-[#222e35] px-6 py-4 border-t border-[#2a3942]">
+                  <div className="flex justify-end gap-2 bg-white px-6 py-4 border-t border-gray-200 dark:bg-gray-800 dark:border-gray-700">
                     <button
-                      className="px-4 py-2 bg-gray-700 text-gray-200 rounded hover:bg-gray-600"
+                      className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
                       onClick={() => { setShowCreateCampaignModal(false); setCampaignStep(1); setSelectedCampaignContacts([]); setCampaignGroupName(''); }}
                     >
                       Cancel
@@ -852,11 +1098,26 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings, onChatSelect }) => {
                     <button
                       className="px-4 py-2 bg-[#00a884] text-white rounded hover:bg-[#008f6f]"
                       onClick={() => {
-                        setCampaigns([...campaigns, { name: campaignGroupName || 'Untitled Campaign', contacts: selectedCampaignContacts }]);
+                        const newCampaign = { 
+                          id: Date.now().toString(), // Generate a unique ID
+                          name: campaignGroupName || 'Untitled Campaign', 
+                          contacts: selectedCampaignContacts 
+                        };
+                        console.log("Creating new campaign:", newCampaign);
+                        setCampaigns([...campaigns, newCampaign]);
                         setShowCreateCampaignModal(false);
                         setCampaignStep(1);
                         setSelectedCampaignContacts([]);
                         setCampaignGroupName('');
+                        
+                        // Automatically select the newly created campaign
+                        setActiveCampaign(newCampaign.id);
+                        
+                        // Pass the campaign to parent component
+                        if (onCampaignSelect) {
+                          console.log("Passing new campaign to Main component:", newCampaign);
+                          onCampaignSelect(newCampaign);
+                        }
                       }}
                       disabled={selectedCampaignContacts.length === 0}
                     >
