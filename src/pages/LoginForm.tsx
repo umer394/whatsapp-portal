@@ -61,6 +61,11 @@ const LoginForm: React.FC = () => {
     <div className={`min-h-screen ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
       <ToastContainer position="top-right" autoClose={5000} hideProgressBar={false} />
       <div className="flex min-h-screen flex-col items-center justify-center px-4 py-8">
+        <div className="mb-4 flex justify-center">
+        <h2 className={`mb-4 text-center text-2xl font-semibold ${darkMode ? 'text-white' : 'text-gray-800'}`}>
+            WABI
+        </h2>
+          </div>
         <div className={`w-full max-w-md rounded-lg ${darkMode ? 'bg-gray-800 text-white' : 'bg-white'} p-5 shadow-md`}>
           <div className="mb-5 flex border-b">
             <Link to="/register" className={`w-1/2 pb-3 text-center font-medium ${darkMode ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'}`}>
