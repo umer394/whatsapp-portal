@@ -44,6 +44,7 @@ export interface Contact {
   metaUpdatedBy: string;
   addedOn: string;
   updatedOn: string;
+  photo?: string; // Contact photo URL from API
 }
 
 export interface ContactsResponse {

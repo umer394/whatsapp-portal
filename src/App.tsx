@@ -9,6 +9,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Main from './pages/Main';
 import ProtectedRoute from './components/ProtectedRoute';
+import './fonts/MabryPro-Regular.ttf';
 
 const App: React.FC = () => {
   return (
@@ -16,21 +17,23 @@ const App: React.FC = () => {
       <AuthProvider>
         <ChatProvider>
           <ToastProvider>
-            <Router>
-              <Routes>
-                <Route path="/login" element={<Login />} />
-                <Route path="/register" element={<Register />} />
-                <Route 
-                  path="/" 
-                  element={
-                    <ProtectedRoute>
-                      <Main />
-                    </ProtectedRoute>
-                  } 
-                />
-                <Route path="*" element={<Navigate to="/login" />} />
-              </Routes>
-            </Router>
+            <div style={{ fontFamily: "'Mabry Pro', sans-serif" }}>
+              <Router>
+                <Routes>
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/register" element={<Register />} />
+                  <Route 
+                    path="/" 
+                    element={
+                      <ProtectedRoute>
+                        <Main />
+                      </ProtectedRoute>
+                    } 
+                  />
+                  <Route path="*" element={<Navigate to="/login" />} />
+                </Routes>
+              </Router>
+            </div>
           </ToastProvider>
         </ChatProvider>
       </AuthProvider>

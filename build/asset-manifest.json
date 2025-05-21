@@ -1,15 +1,16 @@
 {
   "files": {
-    "main.css": "/static/css/main.6b9d3d2e.css",
-    "main.js": "/static/js/main.304c0a6a.js",
+    "main.css": "/static/css/main.eb87e489.css",
+    "main.js": "/static/js/main.d0fff1a7.js",
     "static/js/453.232b89c4.chunk.js": "/static/js/453.232b89c4.chunk.js",
+    "static/media/MabryPro-Regular.ttf": "/static/media/MabryPro-Regular.8fa2ed7c46ac71fdda61.ttf",
     "index.html": "/index.html",
-    "main.6b9d3d2e.css.map": "/static/css/main.6b9d3d2e.css.map",
-    "main.304c0a6a.js.map": "/static/js/main.304c0a6a.js.map",
+    "main.eb87e489.css.map": "/static/css/main.eb87e489.css.map",
+    "main.d0fff1a7.js.map": "/static/js/main.d0fff1a7.js.map",
     "453.232b89c4.chunk.js.map": "/static/js/453.232b89c4.chunk.js.map"
   },
   "entrypoints": [
-    "static/css/main.6b9d3d2e.css",
-    "static/js/main.304c0a6a.js"
+    "static/css/main.eb87e489.css",
+    "static/js/main.d0fff1a7.js"
   ]
 }

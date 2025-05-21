@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { FaTimes } from 'react-icons/fa';
+import { gradients } from '../styles/theme';
 
 interface QRCodeModalProps {
   onClose: () => void;
@@ -271,100 +271,156 @@ const QRCodeModal: React.FC<QRCodeModalProps> = ({ onClose, onConnect }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden dark:bg-gray-800">
-        {/* Modal header */}
-        <div className="flex items-center justify-between bg-white px-6 py-4 border-b border-gray-200 dark:bg-gray-800 dark:border-gray-700">
-          <h2 className="text-xl font-semibold text-gray-800 dark:text-white">Connect with WhatsApp</h2>
-          <button 
-            onClick={onClose} 
-            className="text-gray-500 hover:text-gray-700 focus:outline-none dark:text-gray-400 dark:hover:text-gray-300"
-          >
-            <FaTimes size={20} />
-          </button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div 
+        ref={modalRef}
+        className="relative w-full max-w-md rounded-lg bg-white shadow-lg"
+      >
+        {/* Close button */}
+        <button 
+          onClick={onClose}
+          className="absolute right-3 top-3 text-gray-500 hover:text-gray-700"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+
+        {/* QR Code */}
+        <div className="flex justify-center pt-6 px-6">
+          <div className="relative h-64 w-64 overflow-hidden">
+            {loading ? (
+              <div className="flex h-full w-full items-center justify-center bg-gray-100">
+                <div className="h-12 w-12 animate-spin rounded-full border-4 border-t-4 border-gray-200 border-t-green-500"></div>
+              </div>
+            ) : error ? (
+              <div className="flex h-full w-full flex-col items-center justify-center bg-red-50 p-4 text-center">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-red-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <p className="text-sm text-red-600 mb-3">{error}</p>
+                <button 
+                  onClick={handleRetry}
+                  className="rounded-md px-3 py-1 text-sm text-white hover:opacity-90"
+                  style={{ background: gradients.primary.background }}
+                >
+                  Retry
+                </button>
+              </div>
+            ) : qrData?.connected ? (
+              <div className="flex h-full w-full flex-col items-center justify-center bg-green-50 text-center">
+                <div className="mb-4 rounded-full bg-green-100 p-4 text-green-500">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <h3 className="mb-1 text-lg font-medium text-green-800">WhatsApp Connected</h3>
+                <p className="text-sm text-green-600">Your WhatsApp account is already connected to this device.</p>
+              </div>
+            ) : qrData?.qrCode ? (
+              <>
+                <img 
+                  src={qrData.qrCode} 
+                  alt="WhatsApp QR Code" 
+                  className="h-full w-full"
+                />
+              </>
+            ) : (
+              <div className="flex h-full w-full items-center justify-center bg-gray-100">
+                <p className="text-sm text-gray-500">QR Code not available</p>
+              </div>
+            )}
+          </div>
         </div>
-        
-        {/* Modal content */}
-        <div className="bg-white px-6 py-6 dark:bg-gray-800">
-          {loading ? (
-            <div className="text-center">
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
-                <div className="h-10 w-10 animate-spin rounded-full border-4 border-green-500 border-t-transparent"></div>
-              </div>
-              <h3 className="mb-2 text-lg font-semibold text-gray-800 dark:text-white">Connecting to WhatsApp</h3>
-              <p className="text-gray-600 dark:text-gray-300">Please wait while we establish the connection...</p>
-            </div>
-          ) : error ? (
-            <div className="text-center">
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-100 text-red-500 dark:bg-red-900/30 dark:text-red-400">
-                <FaTimes size={32} />
-              </div>
-              <h3 className="mb-2 text-lg font-semibold text-gray-800 dark:text-white">Connection Error</h3>
-              <p className="mb-4 text-red-600 dark:text-red-400">{error}</p>
-              <button
-                onClick={handleRetry}
-                className="rounded-md bg-green-500 px-4 py-2 text-white hover:bg-green-600"
-              >
-                Try Again
-              </button>
-            </div>
-          ) : qrData?.connected ? (
-            <div className="text-center">
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
-                <div className="h-10 w-10 animate-spin rounded-full border-4 border-green-500 border-t-transparent"></div>
-              </div>
-              <h3 className="mb-2 text-lg font-semibold text-gray-800 dark:text-white">WhatsApp Connected</h3>
-              <p className="text-gray-600 dark:text-gray-300">Your WhatsApp account is successfully linked to this device.</p>
-            </div>
-          ) : qrData?.qrCode ? (
+
+        {/* Login text */}
+        <div className="px-6">
+          {qrData?.connected ? (
             <>
-              <div className="text-center">
-                <div className="flex justify-center">
-                  <img 
-                    src={qrData.qrCode} 
-                    alt="WhatsApp QR Code" 
-                    className="h-64 w-64 rounded-lg"
-                  />
-                </div>
-                <div className="mt-6 px-2">
-                  <h3 className="mb-2 text-lg font-semibold text-gray-800 dark:text-white">1. Open WhatsApp on your phone</h3>
-                  <p className="mb-4 text-gray-600 dark:text-gray-300">
-                    Go to Settings {'>>'} Linked Devices {'>>'} Link a Device
-                  </p>
-                  <h3 className="mb-2 text-lg font-semibold text-gray-800 dark:text-white">2. Scan the QR code</h3>
-                  <p className="text-gray-600 dark:text-gray-300">
-                    Point your phone to this screen to capture the code
-                  </p>
-                </div>
-              </div>
+              <h2 className="mb-1 text-center text-xl font-medium text-gray-800">
+                WhatsApp Connected
+              </h2>
+              <p className="mb-3 text-center text-sm text-gray-600">
+                Your WhatsApp account is successfully linked to this device.
+              </p>
             </>
           ) : (
-            <div className="text-center">
-              <div className="flex h-64 w-64 items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700">
-                <div className="h-10 w-10 animate-spin rounded-full border-4 border-green-500 border-t-transparent"></div>
-              </div>
-              <div className="mt-6 px-2">
-                <h3 className="mb-2 text-lg font-semibold text-gray-800 dark:text-white">1. Open WhatsApp on your phone</h3>
-                <p className="mb-4 text-gray-600 dark:text-gray-300">
-                  Go to Settings {'>>'} Linked Devices {'>>'} Link a Device
-                </p>
-                <h3 className="mb-2 text-lg font-semibold text-gray-800 dark:text-white">2. Scan the QR code</h3>
-                <p className="text-gray-600 dark:text-gray-300">
-                  Point your phone to this screen to capture the code
-                </p>
-              </div>
-            </div>
+            <>
+              <h2 className="mb-1 text-center text-xl font-medium text-gray-800">
+                Login to WhatsApp
+              </h2>
+              <p className="mb-3 text-center text-sm text-gray-600">
+                Scan this QR code to link an existing WhatsApp account with this device.
+                <a href="#" className="block text-center hover:underline text-xs mt-0.5" style={{ color: '#25D366' }}>
+                  Learn more
+                </a>
+              </p>
+            </>
           )}
         </div>
-        
-        {/* Modal footer */}
-        <div className="flex justify-end gap-2 bg-gray-50 px-6 py-3 dark:bg-gray-700">
-          <button 
-            onClick={onClose}
-            className="rounded-md border border-gray-300 bg-white px-4 py-2 text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
-          >
-            Close
-          </button>
+
+        {/* Instructions */}
+        <div className="mx-6 mb-4 mt-2 rounded-md bg-gray-50 p-3">
+          {qrData?.connected ? (
+            <div className="text-sm text-gray-700">
+              <p className="mb-2">Your WhatsApp account is already connected to this device. You can:</p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>Start sending and receiving messages</li>
+                <li>Access your chats from the sidebar</li>
+                <li>Close this window and continue using the application</li>
+              </ul>
+              <div className="mt-3 flex justify-center">
+                <button 
+                  onClick={onClose}
+                  className="rounded-md px-4 py-2 text-sm text-white hover:opacity-90"
+                  style={{ background: gradients.primary.background }}
+                >
+                  Continue to WhatsApp
+                </button>
+              </div>
+            </div>
+          ) : (
+            <ol className="space-y-1.5 text-sm text-gray-700">
+              <li className="flex items-start gap-2">
+                <span className="font-bold">1.</span>
+                <span className="flex items-center">
+                  Open 
+                  <span className="inline-flex items-center mx-1 text-white rounded px-1 text-xs" style={{ background: gradients.primary.background }}>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3 mr-0.5">
+                      <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766.001-3.187-2.575-5.77-5.764-5.771z"/>
+                    </svg>
+                    WhatsApp
+                  </span> 
+                  on your phone
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="font-bold">2.</span>
+                <span>
+                  Tap <strong>Settings</strong> <span className="inline-block rounded-full bg-gray-200 px-1 text-center text-xs">⚙️</span> on iPhone, or <strong>Menu</strong> <span className="inline-block rounded-full bg-gray-200 px-1 text-center text-xs">⋮</span> on Android
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="font-bold">3.</span>
+                <span>
+                  Tap <strong>Linked devices</strong> and then <strong>Link a device</strong>
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="font-bold">4.</span>
+                <span>
+                  Point your phone at this screen to scan the QR code
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="font-bold">5.</span>
+                <span>
+                  Keep both apps open and connected to the internet (Wi-Fi, 4G or faster) while your chats load.
+                </span>
+              </li>
+            </ol>
+          )}
         </div>
       </div>
     </div>

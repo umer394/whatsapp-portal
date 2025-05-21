@@ -10,6 +10,9 @@ import QRCodeModal from '../components/QRCodeModal';
 import { FaWhatsapp, FaQrcode } from 'react-icons/fa';
 import { Contact } from '../types';
 
+// WhatsApp gradient for reuse
+const whatsappGradient = 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)';
+
 const Main: React.FC = () => {
   const { darkMode } = useTheme();
   const { checkWhatsAppStatus, whatsappConnected, whatsappProfile, whatsappLoading } = useAuth();
@@ -126,14 +129,15 @@ const Main: React.FC = () => {
             ) : (
               <>
                 <h1 className="mb-2 text-3xl font-light text-gray-600 dark:text-gray-300">
-                  Use WhatsApp on your computer
+                  Use WABI on your computer
                 </h1>
                 <p className="text-gray-500 dark:text-gray-400">
                   Connect with your phone to use WABI
                 </p>
                 <div className="mt-6 flex justify-center">
                   <button 
-                    className="flex items-center justify-center rounded-md bg-green-500 px-6 py-3 text-white hover:bg-green-600"
+                    className="flex items-center justify-center rounded-md px-6 py-3 text-white hover:opacity-90"
+                    style={{ background: whatsappGradient }}
                     onClick={handleOpenQrModal}
                   >
                     <FaQrcode className="mr-2" />
@@ -179,6 +183,7 @@ const Main: React.FC = () => {
               onCampaignSelect={handleCampaignSelect}
               onTabChange={handleTabChange}
               activeTab={activeTab}
+              iconHighlightColor={whatsappGradient}
             />
           </div>
           

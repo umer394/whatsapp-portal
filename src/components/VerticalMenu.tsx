@@ -13,12 +13,14 @@ interface VerticalMenuProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
   onOpenSettings: () => void;
+  iconHighlightColor?: string;
 }
 
 const VerticalMenu: React.FC<VerticalMenuProps> = ({ 
   activeTab, 
   onTabChange,
-  onOpenSettings
+  onOpenSettings,
+  iconHighlightColor
 }) => {
   const { logout } = useAuth();
   const [showTooltip, setShowTooltip] = useState<string | null>(null);
@@ -53,9 +55,10 @@ const VerticalMenu: React.FC<VerticalMenuProps> = ({
             <button
               className={`flex h-10 w-10 items-center justify-center rounded-xl transition-all ${
                 activeTab === item.id
-                  ? 'bg-[#25D366] text-white'
+                  ? 'text-white'
                   : 'text-gray-600 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700'
               }`}
+              style={activeTab === item.id && iconHighlightColor ? { background: iconHighlightColor } : {}}
               onClick={() => onTabChange(item.id)}
               aria-label={item.label}
             >

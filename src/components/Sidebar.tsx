@@ -19,6 +19,7 @@ interface SidebarProps {
   onCampaignSelect?: (campaign: { id: string; name: string; contacts: Contact[] }) => void;
   onTabChange?: (tab: string) => void;
   activeTab?: string;
+  iconHighlightColor?: string;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ 
@@ -26,7 +27,8 @@ const Sidebar: React.FC<SidebarProps> = ({
   onChatSelect, 
   onCampaignSelect, 
   onTabChange,
-  activeTab: externalActiveTab
+  activeTab: externalActiveTab,
+  iconHighlightColor
 }) => {
   const { user, checkWhatsAppStatus } = useAuth();
   const { chats, activeChat, selectChat } = useChat();
@@ -197,17 +199,66 @@ const Sidebar: React.FC<SidebarProps> = ({
       const data: ContactsResponse = await response.json();
       
       if (data.status === 'success') {
+        // Process contacts to extract photo if available in the response
+        const processedContacts = data.data.items.map(contact => {
+          // Check if API includes photo field under any known property
+          if (contact.hasOwnProperty('photo')) {
+            return contact;
+          } else if (contact.hasOwnProperty('profilePicture')) {
+            return { ...contact, photo: (contact as any).profilePicture };
+          } else if (contact.hasOwnProperty('avatar')) {
+            return { ...contact, photo: (contact as any).avatar };
+          } else if (contact.hasOwnProperty('image')) {
+            return { ...contact, photo: (contact as any).image };
+          } else if (contact.hasOwnProperty('profilePhoto')) {
+            return { ...contact, photo: (contact as any).profilePhoto };
+          } else if (contact.hasOwnProperty('photoURL')) {
+            return { ...contact, photo: (contact as any).photoURL };
+          } else if (contact.hasOwnProperty('picture')) {
+            return { ...contact, photo: (contact as any).picture };
+          }
+          
+          // Check for nested photo properties
+          for (const key in contact) {
+            if (typeof (contact as any)[key] === 'object' && (contact as any)[key] !== null) {
+              const obj = (contact as any)[key];
+              if (obj.hasOwnProperty('photo') || obj.hasOwnProperty('url') || 
+                  obj.hasOwnProperty('profilePicture') || obj.hasOwnProperty('avatar')) {
+                const photoUrl = obj.photo || obj.url || obj.profilePicture || obj.avatar;
+                return { ...contact, photo: photoUrl };
+              }
+            }
+          }
+          
+                          // For contacts without photos, try to fetch from WhatsApp API if they have a phone number
+          if (contact.phone1Value) {
+            // Don't wait for this promise to resolve - we'll update the UI when it does
+            fetchProfilePicture(contact.phone1Value).then(pictureUrl => {
+              if (pictureUrl) {
+                // Update the contact in the state with the WhatsApp profile picture
+                setContacts(prevContacts => 
+                  prevContacts.map(c => 
+                    c.id === contact.id ? { ...c, photo: pictureUrl } : c
+                  )
+                );
+              }
+            });
+          }
+          
+          return contact;
+        });
+        
         // If it's the first page or a new search, replace contacts
         // Otherwise append to existing contacts for pagination
         if (contactsPage === 1) {
-          setContacts(data.data.items);
+          setContacts(processedContacts);
           
           // Store initial contact count for comparison after upload
           if (initialContactCount === 0) {
             setInitialContactCount(data.data.pagination.totalCount);
           }
         } else {
-          setContacts(prev => [...prev, ...data.data.items]);
+          setContacts(prev => [...prev, ...processedContacts]);
         }
         setHasMoreContacts(data.data.pagination.hasNext);
       } else {
@@ -224,6 +275,39 @@ const Sidebar: React.FC<SidebarProps> = ({
     setContactsPage(prev => prev + 1);
   };
 
+  // Helper function to fetch profile picture from WhatsApp API
+  const fetchProfilePicture = async (phoneNumber: string): Promise<string | null> => {
+    try {
+      // Get token from localStorage
+      const token = localStorage.getItem('token');
+      if (!token) return null;
+      
+      // Format phone number if needed
+      const formattedPhone = phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber}`;
+      
+      // Call WhatsApp API to get profile picture
+      const response = await fetch(
+        `https://v3-wabi.cloudious.net/api/WhatsApp/GetProfilePicture?phoneNumber=${encodeURIComponent(formattedPhone)}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      );
+      
+      const data = await response.json();
+      
+      if (data.status === 'success' && data.data && data.data.profilePictureUrl) {
+        return data.data.profilePictureUrl;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error("Error fetching profile picture:", error);
+      return null;
+    }
+  };
+  
   const getContactDisplayName = (contact: Contact): string => {
     if (contact.firstName || contact.lastName) {
       return `${contact.firstName} ${contact.lastName}`.trim();
@@ -620,15 +704,18 @@ const Sidebar: React.FC<SidebarProps> = ({
                   
                   <div className="relative w-full h-6 bg-gray-200 dark:bg-gray-700 rounded-full mb-6 overflow-hidden">
                     <div 
-                      className="absolute top-0 left-0 h-full bg-[#00a884] rounded-full transition-all duration-500 ease-in-out"
-                      style={{ width: `${uploadProgress}%` }}
+                      className="absolute top-0 left-0 h-full rounded-full transition-all duration-500 ease-in-out"
+                      style={{ 
+                        width: `${uploadProgress}%`,
+                        background: 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)'
+                      }}
                     >
                       {uploadProgress === 100 && (
-                        <div className="h-full w-full bg-[#00a884] animate-pulse"></div>
+                        <div className="h-full w-full animate-pulse" style={{ background: 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)' }}></div>
                       )}
                     </div>
                     <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center">
-                      <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      <span className="text-xs font-medium text-black">
                         {uploadProgress}%
                       </span>
                     </div>
@@ -728,9 +815,32 @@ const Sidebar: React.FC<SidebarProps> = ({
                         className="flex cursor-pointer items-center px-3 py-3 hover:bg-[#f0f2f5] dark:hover:bg-gray-800"
                       >
                         <div className="mr-3">
-                          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#DFE5E7] text-[#54656f] dark:bg-gray-700 dark:text-gray-300">
-                            {getContactDisplayName(contact).charAt(0).toUpperCase()}
-                          </div>
+                          {contact.photo ? (
+                            <div className="h-12 w-12 rounded-full overflow-hidden">
+                              <img 
+                                src={contact.photo == ''
+                                  ? '/placeholder-avatar.png' // Use a placeholder for Google photos that won't load
+                                  : contact.photo} 
+                                alt={getContactDisplayName(contact)}
+                                className="h-full w-full object-cover"
+                                onError={(e) => {
+                                  // Image failed to load, replace with fallback avatar
+                                  e.currentTarget.style.display = 'none';
+                                  e.currentTarget.parentElement!.innerHTML = `
+                                    <div class="h-12 w-12 rounded-full bg-[#DFE5E7] text-[#54656f] flex items-center justify-center">
+                                      ${getContactDisplayName(contact).charAt(0).toUpperCase()}
+                                    </div>
+                                  `;
+                                }}
+                                referrerPolicy="no-referrer"
+                                crossOrigin="anonymous"
+                              />
+                            </div>
+                          ) : (
+                            <div className="h-12 w-12 rounded-full bg-[#DFE5E7] text-[#54656f] flex items-center justify-center dark:bg-gray-700 dark:text-gray-300">
+                              {getContactDisplayName(contact).charAt(0).toUpperCase()}
+                            </div>
+                          )}
                         </div>
                         
                         <div className="flex-1 min-w-0">
@@ -899,6 +1009,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         activeTab={activeTab} 
         onTabChange={handleTabChange} 
         onOpenSettings={onOpenSettings}
+        iconHighlightColor={iconHighlightColor}
       />
 
       {/* Sidebar Content */}
@@ -1009,8 +1120,33 @@ const Sidebar: React.FC<SidebarProps> = ({
                               }
                             }}
                           >
-                            <div className="flex-shrink-0 h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center text-gray-700 font-bold mr-3 dark:bg-gray-600 dark:text-white">
-                              {getContactDisplayName(contact).charAt(0).toUpperCase()}
+                            <div className="flex-shrink-0 mr-3">
+                              {contact.photo ? (
+                                <div className="h-10 w-10 rounded-full overflow-hidden">
+                                  <img 
+                                    src={contact.photo && contact.photo.includes('googleusercontent.com') 
+                                      ? '/placeholder-avatar.png' // Use a placeholder for Google photos that won't load
+                                      : contact.photo} 
+                                    alt={getContactDisplayName(contact)}
+                                    className="h-full w-full object-cover"
+                                    onError={(e) => {
+                                      // Image failed to load, replace with fallback avatar
+                                      e.currentTarget.style.display = 'none';
+                                      e.currentTarget.parentElement!.innerHTML = `
+                                        <div class="h-10 w-10 rounded-full bg-gray-300 text-gray-700 font-bold flex items-center justify-center dark:bg-gray-600 dark:text-white">
+                                          ${getContactDisplayName(contact).charAt(0).toUpperCase()}
+                                        </div>
+                                      `;
+                                    }}
+                                    referrerPolicy="no-referrer"
+                                    crossOrigin="anonymous"
+                                  />
+                                </div>
+                              ) : (
+                                <div className="h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center text-gray-700 font-bold dark:bg-gray-600 dark:text-white">
+                                  {getContactDisplayName(contact).charAt(0).toUpperCase()}
+                                </div>
+                              )}
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="text-gray-900 font-medium truncate dark:text-white">{getContactDisplayName(contact)}</div>

@@ -3,7 +3,12 @@ import { AuthState, User, WhatsAppProfile } from '../types';
 import mockUsers from '../data/mockUsers';
 
 interface AuthContextType extends AuthState {
-  login: (credentials: { email: string; password: string }) => Promise<{ success: boolean; message: string }>;
+  login: (credentials: { 
+    email?: string; 
+    password?: string;
+    token?: string;
+    user?: any;
+  }) => Promise<{ success: boolean; message: string }>;
   loginWithQR: (qrCode?: string) => Promise<void>;
   logout: () => void;
   updateUser: (userData: Partial<User>) => void;
@@ -222,38 +227,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Login with email and password
+  // Login with email and password or token/user
   const login = async (credentials: { 
-    email: string; 
-    password: string 
+    email?: string; 
+    password?: string;
+    token?: string;
+    user?: any;
   }): Promise<{ success: boolean; message: string }> => {
     setAuthState(prev => ({ ...prev, loading: true, error: null }));
     
     try {
-      // Map email to username for the API request
-      const apiRequest = {
-        username: credentials.email, // API expects 'username' field
-        password: credentials.password
-      };
-      
-      const response = await fetch(`${API_BASE_URL}Users/SignIn`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(apiRequest),
-      });
-      
-      const data = await response.json();
-      
-      if (data.status === 'success') {
+      // Direct login with token and user data (OTP flow)
+      if (credentials.token && credentials.user) {
         // Save token and user data
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('user', JSON.stringify(data.data));
+        localStorage.setItem('token', credentials.token);
+        localStorage.setItem('user', JSON.stringify(credentials.user));
         
         setAuthState({
           isAuthenticated: true,
-          user: data.data,
+          user: credentials.user,
           loading: false,
           error: null,
         });
@@ -261,16 +253,55 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Check WhatsApp status after successful login
         await checkWhatsAppStatus();
         
-        return { success: true, message: data.message };
-      } else {
-        setAuthState(prev => ({
-          ...prev,
-          loading: false,
-          error: data.message || 'Login failed',
-        }));
-        
-        return { success: false, message: data.message || 'Login failed' };
+        return { success: true, message: 'Login successful' };
       }
+      
+      // Regular email/password login
+      if (credentials.email && credentials.password) {
+        // Map email to username for the API request
+        const apiRequest = {
+          username: credentials.email, // API expects 'username' field
+          password: credentials.password
+        };
+        
+        const response = await fetch(`${API_BASE_URL}Users/SignIn`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(apiRequest),
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+          // Save token and user data
+          localStorage.setItem('token', data.token);
+          localStorage.setItem('user', JSON.stringify(data.data));
+          
+          setAuthState({
+            isAuthenticated: true,
+            user: data.data,
+            loading: false,
+            error: null,
+          });
+          
+          // Check WhatsApp status after successful login
+          await checkWhatsAppStatus();
+          
+          return { success: true, message: data.message };
+        } else {
+          setAuthState(prev => ({
+            ...prev,
+            loading: false,
+            error: data.message || 'Login failed',
+          }));
+          
+          return { success: false, message: data.message || 'Login failed' };
+        }
+      }
+      
+      throw new Error('Invalid login credentials');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Login failed';
       setAuthState(prev => ({
