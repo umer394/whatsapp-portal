@@ -2,12 +2,21 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useChat } from '../context/ChatContext';
 import { useToast } from '../context/ToastContext';
+import { useTheme } from '../context/ThemeContext';
 import { format } from 'date-fns';
 import { 
   FaSearch, 
   FaCheck,
   FaCheckDouble,
   FaUserPlus,
+  FaMoon,
+  FaSun,
+  FaBell,
+  FaEdit,
+  FaSignOutAlt,
+  FaCamera,
+  FaWhatsapp,
+  FaSpinner
 } from 'react-icons/fa';
 import { Chat, User, Contact, ContactsResponse } from '../types';
 import NewChatModal from './NewChatModal';
@@ -15,6 +24,7 @@ import VerticalMenu from './VerticalMenu';
 import { HotTable } from '@handsontable/react';
 import { registerAllModules } from 'handsontable/registry';
 import 'handsontable/dist/handsontable.full.min.css';
+import { useNavigate } from 'react-router-dom';
 
 // Register Handsontable modules
 registerAllModules();
@@ -38,9 +48,11 @@ const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const contactsContainerRef = useRef<HTMLDivElement>(null);
   
-  const { user, checkWhatsAppStatus } = useAuth();
+  const { user, checkWhatsAppStatus, updateUser, logout, whatsappConnected, whatsappProfile, whatsappLoading } = useAuth();
   const { chats, activeChat, selectChat } = useChat();
   const { showToast } = useToast();
+  const { darkMode, toggleDarkMode } = useTheme();
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [showNewChatModal, setShowNewChatModal] = useState(false);
   const [activeTab, setActiveTab] = useState(externalActiveTab || 'contacts');
@@ -91,7 +103,8 @@ const Sidebar: React.FC<SidebarProps> = ({
   const [savingCampaign, setSavingCampaign] = useState(false);
   const [campaignError, setCampaignError] = useState<string | null>(null);
   const [loadingCampaignDetails, setLoadingCampaignDetails] = useState(false);
-  const [displayedCampaignContacts, setDisplayedCampaignContacts] = useState<Contact[]>([]);
+  // Add a ref for the campaign search input near other useRef declarations (around line 54)
+  const campaignSearchInputRef = useRef<HTMLInputElement>(null);
   
   // Check WhatsApp status when component mounts - only once
   useEffect(() => {
@@ -539,7 +552,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   };
 
   // Function to fetch contacts for the campaign popup
-  const fetchCampaignContacts = async (page = 1, append = false) => {
+  const fetchCampaignContacts = async (page = 1, append = false, searchTerm?: string) => {
     try {
       setLoadingCampaignContacts(true);
       
@@ -549,8 +562,11 @@ const Sidebar: React.FC<SidebarProps> = ({
         throw new Error('Authentication token not found');
       }
 
+      // Use the provided searchTerm if available, otherwise use the state value
+      const queryTerm = searchTerm !== undefined ? searchTerm : campaignPopupSearchQuery;
+
       const response = await fetch(
-        `https://api-ibico.cloudious.net/api/Contacts/GetByPagination/?pageNumber=${page}&pageSize=50&searchTerm=${campaignPopupSearchQuery}`,
+        `https://api-ibico.cloudious.net/api/Contacts/GetByPagination/?pageNumber=${page}&pageSize=50&searchTerm=${queryTerm}`,
         {
           headers: {
             'Authorization': `Bearer ${token}`
@@ -626,11 +642,6 @@ const Sidebar: React.FC<SidebarProps> = ({
           : [...campaignContacts, ...filteredContacts];
         
         setCampaignContacts(newCampaignContacts);
-        
-        // If there's no search query, update the displayed contacts to match
-        if (!campaignPopupSearchQuery.trim()) {
-          setDisplayedCampaignContacts(newCampaignContacts);
-        }
         
         // Update pagination state
         setHasMoreCampaignContacts(data.data.pagination.hasNext);
@@ -742,82 +753,82 @@ const Sidebar: React.FC<SidebarProps> = ({
   };
 
   // Add Google Import functionality
-  const handleGoogleImport = () => {
-    // Show toast explaining this feature
-    showToast('info', 'Starting Google Contacts import process...');
+  // const handleGoogleImport = () => {
+  //   // Show toast explaining this feature
+  //   showToast('info', 'Starting Google Contacts import process...');
     
-    // Open Google OAuth popup
-    // This is a mock implementation since we would need a real Google OAuth integration
-    const width = 500;
-    const height = 600;
-    const left = window.screen.width / 2 - width / 2;
-    const top = window.screen.height / 2 - height / 2;
+  //   // Open Google OAuth popup
+  //   // This is a mock implementation since we would need a real Google OAuth integration
+  //   const width = 500;
+  //   const height = 600;
+  //   const left = window.screen.width / 2 - width / 2;
+  //   const top = window.screen.height / 2 - height / 2;
     
-    try {
-      window.open(
-        'https://accounts.google.com/o/oauth2/v2/auth?scope=https://www.googleapis.com/auth/contacts.readonly&response_type=code&redirect_uri=https://your-app-url.com/google-auth-callback',
-        'Google Contacts Authorization',
-        `width=${width},height=${height},left=${left},top=${top}`
-      );
+  //   try {
+  //     window.open(
+  //       'https://accounts.google.com/o/oauth2/v2/auth?scope=https://www.googleapis.com/auth/contacts.readonly&response_type=code&redirect_uri=https://your-app-url.com/google-auth-callback',
+  //       'Google Contacts Authorization',
+  //       `width=${width},height=${height},left=${left},top=${top}`
+  //     );
       
-      // In a real implementation, we would listen for the OAuth callback
-      // For now, we'll simulate success after a delay
-      setTimeout(() => {
-        // Adding mock contacts after "import" with proper Contact type
-        const mockGoogleContacts: Contact[] = [
-          { 
-            id: Date.now(), 
-            firstName: 'John', 
-            lastName: 'Google', 
-            middleName: '',
-            organizationName: 'Google Inc',
-            organizationTitle: 'Developer',
-            emailValue: 'john.google@example.com',
-            phone1Value: '+1234567890',
-            phone2Value: '',
-            phone3Value: '',
-            labels: 'google-import',
-            businessID: 1,
-            userID: 1,
-            isActive: true,
-            metaAddedBy: 'google-import',
-            metaUpdatedBy: 'google-import',
-            addedOn: new Date().toISOString(),
-            updatedOn: new Date().toISOString()
-          },
-          { 
-            id: Date.now() + 1, 
-            firstName: 'Jane', 
-            lastName: 'Gmail', 
-            middleName: '',
-            organizationName: 'Gmail',
-            organizationTitle: 'Designer',
-            emailValue: 'jane.gmail@example.com',
-            phone1Value: '+0987654321',
-            phone2Value: '',
-            phone3Value: '',
-            labels: 'google-import',
-            businessID: 1,
-            userID: 1,
-            isActive: true,
-            metaAddedBy: 'google-import',
-            metaUpdatedBy: 'google-import',
-            addedOn: new Date().toISOString(),
-            updatedOn: new Date().toISOString()
-          }
-        ];
+  //     // In a real implementation, we would listen for the OAuth callback
+  //     // For now, we'll simulate success after a delay
+  //     setTimeout(() => {
+  //       // Adding mock contacts after "import" with proper Contact type
+  //       const mockGoogleContacts: Contact[] = [
+  //         { 
+  //           id: Date.now(), 
+  //           firstName: 'John', 
+  //           lastName: 'Google', 
+  //           middleName: '',
+  //           organizationName: 'Google Inc',
+  //           organizationTitle: 'Developer',
+  //           emailValue: 'john.google@example.com',
+  //           phone1Value: '+1234567890',
+  //           phone2Value: '',
+  //           phone3Value: '',
+  //           labels: 'google-import',
+  //           businessID: 1,
+  //           userID: 1,
+  //           isActive: true,
+  //           metaAddedBy: 'google-import',
+  //           metaUpdatedBy: 'google-import',
+  //           addedOn: new Date().toISOString(),
+  //           updatedOn: new Date().toISOString()
+  //         },
+  //         { 
+  //           id: Date.now() + 1, 
+  //           firstName: 'Jane', 
+  //           lastName: 'Gmail', 
+  //           middleName: '',
+  //           organizationName: 'Gmail',
+  //           organizationTitle: 'Designer',
+  //           emailValue: 'jane.gmail@example.com',
+  //           phone1Value: '+0987654321',
+  //           phone2Value: '',
+  //           phone3Value: '',
+  //           labels: 'google-import',
+  //           businessID: 1,
+  //           userID: 1,
+  //           isActive: true,
+  //           metaAddedBy: 'google-import',
+  //           metaUpdatedBy: 'google-import',
+  //           addedOn: new Date().toISOString(),
+  //           updatedOn: new Date().toISOString()
+  //         }
+  //       ];
         
-        // Add new contacts to the list
-        setContacts(prev => [...mockGoogleContacts, ...prev]);
+  //       // Add new contacts to the list
+  //       setContacts(prev => [...mockGoogleContacts, ...prev]);
         
-        // Show success message
-        showToast('success', '2 contacts imported from Google successfully!');
-      }, 2000);
-    } catch (error) {
-      console.error('Error opening Google auth window:', error);
-      showToast('error', 'Failed to connect to Google. Please try again.');
-    }
-  };
+  //       // Show success message
+  //       showToast('success', '2 contacts imported from Google successfully!');
+  //     }, 2000);
+  //   } catch (error) {
+  //     console.error('Error opening Google auth window:', error);
+  //     showToast('error', 'Failed to connect to Google. Please try again.');
+  //   }
+  // };
 
   // Campaign icon upload functionality
   const handleIconClick = () => {
@@ -1267,9 +1278,9 @@ const Sidebar: React.FC<SidebarProps> = ({
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                   </svg>
                                 </button>
-                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-200 pointer-events-none z-10">
+                                <div className="absolute top-1/2 right-full -translate-y-1/2 mr-2 px-2 py-1 bg-gray-800 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-200 pointer-events-none z-10">
                                   Edit
-                                  <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-800"></div>
+                                  <div className="absolute top-1/2 left-full -translate-y-1/2 -ml-1 border-4 border-transparent border-l-gray-800"></div>
                                 </div>
                               </div>
                               <div className="relative group/tooltip">
@@ -1292,9 +1303,9 @@ const Sidebar: React.FC<SidebarProps> = ({
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
                                   </svg>
                                 </button>
-                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-200 pointer-events-none z-10">
+                                <div className="absolute top-1/2 right-full -translate-y-1/2 mr-2 px-2 py-1 bg-gray-800 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-200 pointer-events-none z-10">
                                   Manage members
-                                  <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-800"></div>
+                                  <div className="absolute top-1/2 left-full -translate-y-1/2 -ml-1 border-4 border-transparent border-l-gray-800"></div>
                                 </div>
                               </div>
                               <div className="relative group/tooltip">
@@ -1310,9 +1321,9 @@ const Sidebar: React.FC<SidebarProps> = ({
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                   </svg>
                                 </button>
-                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-200 pointer-events-none z-10">
+                                <div className="absolute top-1/2 right-full -translate-y-1/2 mr-2 px-2 py-1 bg-gray-800 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-200 pointer-events-none z-10">
                                   Delete
-                                  <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-800"></div>
+                                  <div className="absolute top-1/2 left-full -translate-y-1/2 -ml-1 border-4 border-transparent border-l-gray-800"></div>
                                 </div>
                               </div>
                             </div>
@@ -1424,6 +1435,20 @@ const Sidebar: React.FC<SidebarProps> = ({
             <p>Analytics feature coming soon</p>
           </div>
         );
+      case 'settings':
+        return (
+          <div className="flex-1 overflow-y-auto">
+            {/* Header */}
+            {/* <div className="bg-white px-4 py-4 dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
+              <h1 className="text-xl font-semibold text-gray-800 dark:text-white">Settings</h1>
+            </div> */}
+            
+            {/* Settings Content */}
+            <div className="p-4">
+              <SettingsContent />
+            </div>
+          </div>
+        );
       default:
         return null;
     }
@@ -1436,6 +1461,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       case 'contacts': return 'Contacts';
       case 'campaigns': return 'Campaigns';
       case 'analytics': return 'Analytics';
+      case 'settings': return 'Settings';
       default: return 'Chat';
     }
   };
@@ -1702,15 +1728,23 @@ const Sidebar: React.FC<SidebarProps> = ({
     }
   }, [activeTab, campaignSearchQuery]);
   
-  // Fetch contacts when the campaign modal is opened
+  // Fix the useEffect hook that initializes the campaign contacts when modal is opened
+  // Fix by removing references to setDisplayedCampaignContacts around line 1970
   useEffect(() => {
     if (showCreateCampaignModal && campaignActiveTab === 'contacts') {
+      // Reset page and search query first
       setCampaignContactsPage(1);
-      setCampaignPopupSearchQuery(''); // Reset popup search when modal opens
-      fetchCampaignContacts(1, false).then(() => {
-        // Initially show all contacts without filtering
-        setDisplayedCampaignContacts(campaignContacts);
-      });
+      setCampaignPopupSearchQuery(''); 
+      
+      // Then fetch contacts with an explicit empty search term
+      fetchCampaignContacts(1, false, '');
+      
+      // Focus on the search input for better UX
+      setTimeout(() => {
+        if (campaignSearchInputRef.current) {
+          campaignSearchInputRef.current.focus();
+        }
+      }, 100);
     }
   }, [showCreateCampaignModal, campaignActiveTab]);
   
@@ -1781,14 +1815,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     };
   }, [showCreateCampaignModal, campaignActiveTab, hasMoreCampaignContacts, loadingCampaignContacts]);
 
-  // Update the useEffect that reacts to campaigns contacts changes around line 1979-1990
-  // Add this effect to update displayed contacts whenever campaignContacts changes
-  useEffect(() => {
-    if (!campaignPopupSearchQuery.trim()) {
-      // If no search query, show all contacts
-      setDisplayedCampaignContacts(campaignContacts);
-    }
-  }, [campaignContacts, campaignPopupSearchQuery]);
+    // The auto-search functionality is now handled directly in the modal open effect above
 
   return (
     <div className="flex h-full">
@@ -1807,9 +1834,10 @@ const Sidebar: React.FC<SidebarProps> = ({
           <h1 className="text-xl font-semibold text-gray-800 dark:text-white">{getTabTitle()}</h1>
           {activeTab === 'campaigns' && (
             <button
-              className="ml-2 p-2 rounded-full bg-[#00a884] text-white hover:bg-[#008f6f] focus:outline-none focus:ring-2 focus:ring-[#00a884]"
+              className="ml-2 p-2 rounded-full text-white focus:outline-none focus:ring-2 focus:ring-[#00a884] hover:opacity-90 transition-opacity"
               onClick={() => setShowCreateCampaignModal(true)}
               title="Create Campaign"
+              style={{ background: 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)' }}
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -1818,25 +1846,18 @@ const Sidebar: React.FC<SidebarProps> = ({
           )}
           {activeTab === 'contacts' && (
             <div className="flex">
-              <button
-                ref={googleContactsRef}
-                className="ml-2 p-2 rounded-full bg-[#00a884] text-white hover:bg-[#008f6f] focus:outline-none focus:ring-2 focus:ring-[#00a884]"
-                title="Import Contacts with Google"
-                onClick={handleGoogleImport}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z" />
-                </svg>
-              </button>
-              <button
-                className="ml-2 p-2 rounded-full bg-[#00a884] text-white hover:bg-[#008f6f] focus:outline-none focus:ring-2 focus:ring-[#00a884]"
-                onClick={handleImportContacts}
-                title="Import Contacts with Excel"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM9 18.5 6.5 16l-1 1L9 20.5l6-6-1-1L9 18.5zM13 9V3.5L18.5 9H13z"/>
-                </svg>
-              </button>
+              <div className="relative group/tooltip">
+                 <button
+                  className="ml-2 p-2 rounded-full text-white focus:outline-none focus:ring-2 focus:ring-[#00a884] hover:opacity-90 transition-opacity"
+                  onClick={() => handleImportContacts()}
+                  title="Import Contacts"
+                  style={{ background: 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)' }}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                </button>
+              </div>
               <input
                 type="file"
                 ref={excelFileInputRef}
@@ -1921,18 +1942,12 @@ const Sidebar: React.FC<SidebarProps> = ({
                           className="w-full rounded-md bg-gray-100 text-gray-800 placeholder-gray-500 px-4 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-[#00a884] border border-transparent focus:border-[#00a884] dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
                           value={campaignPopupSearchQuery}
                           onChange={e => setCampaignPopupSearchQuery(e.target.value)}
+                          ref={campaignSearchInputRef}
                           onKeyDown={e => {
                             if (e.key === 'Enter') {
                               e.preventDefault();
                               setCampaignContactsPage(1);
-                              fetchCampaignContacts(1, false).then(() => {
-                                // Apply filtering only after the fetch has completed
-                                const filtered = campaignContacts.filter(c => 
-                                  getContactDisplayName(c).toLowerCase().includes(campaignPopupSearchQuery.toLowerCase()) || 
-                                  (c.phone1Value && c.phone1Value.includes(campaignPopupSearchQuery))
-                                );
-                                setDisplayedCampaignContacts(filtered);
-                              });
+                              fetchCampaignContacts(1, false); // No search term passed, will use the current state value
                             }
                           }}
                         />
@@ -2154,20 +2169,20 @@ const Sidebar: React.FC<SidebarProps> = ({
                           )}
                           
                           {/* Separator if we have both selected and unselected contacts */}
-                          {selectedCampaignContacts.length > 0 && displayedCampaignContacts.length > 0 && (
+                          {selectedCampaignContacts.length > 0 && campaignContacts.length > 0 && (
                             <div className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg mb-2 dark:bg-gray-700 dark:text-gray-300">
                               Available Contacts
                             </div>
                           )}
                           
                                                         {/* Show available contacts */}
-                              {displayedCampaignContacts.length === 0 && campaignContacts.length === 0 ? (
+                              {campaignContacts.length === 0 ? (
                                 <div className="text-center text-gray-500 py-8 dark:text-gray-400">
                                   {campaignSearchQuery ? 'No matching contacts found' : 'No contacts found'}
                                 </div>
                               ) : (
                                 <div className="divide-y divide-gray-100 dark:divide-gray-700">
-                                  {displayedCampaignContacts.map(contact => {
+                                  {campaignContacts.map(contact => {
                                     // Check if this contact is already in the selected list
                                     const isSelected = selectedCampaignContacts.some(
                                       selected => selected.id === contact.id || 
@@ -2466,9 +2481,9 @@ const Sidebar: React.FC<SidebarProps> = ({
                                 setCampaignNameError(false);
                                 
                                 if (editCampaignId) {
-                                  showToast('success', 'Campaign updated successfully');
+                                  //showToast('success', 'Campaign updated successfully');
                                 } else {
-                                  showToast('success', 'Campaign created successfully');
+                                  //showToast('success', 'Campaign created successfully');
                                 }
                                 
                                 // Reload all campaigns data
@@ -2529,11 +2544,16 @@ const Sidebar: React.FC<SidebarProps> = ({
                         setCampaignStep(1); 
                         setSelectedCampaignContacts([]); 
                         setCampaignGroupName('');
+                        setCampaignDescription('');
                         setCampaignIconUrl(null);
                         setEditCampaignId(null);
                         setCampaignActiveTab('contacts');
-                        setCampaignPopupSearchQuery('');
                         setCampaignNameError(false);
+                        // Reset campaign contacts state
+                        setCampaignContacts([]);
+                        setCampaignContactsPage(1);
+                        setCampaignPopupSearchQuery('');
+                        setHasMoreCampaignContacts(false);
                       }}
                     >
                       Cancel
@@ -2571,9 +2591,9 @@ const Sidebar: React.FC<SidebarProps> = ({
                           setCampaignNameError(false);
                           
                           if (editCampaignId) {
-                            showToast('success', 'Campaign updated successfully');
+                            //showToast('success', 'Campaign updated successfully');
                           } else {
-                            showToast('success', 'Campaign created successfully');
+                            //showToast('success', 'Campaign created successfully');
                           }
                           
                           // Reload all campaigns data
@@ -2626,6 +2646,226 @@ const Sidebar: React.FC<SidebarProps> = ({
       {showNewChatModal && (
         <NewChatModal onClose={() => setShowNewChatModal(false)} />
       )}
+    </div>
+  );
+};
+
+// Add the SettingsContent component definition within the Sidebar component
+const SettingsContent: React.FC = () => {
+  const { user, updateUser, logout, whatsappConnected, whatsappProfile, whatsappLoading, checkWhatsAppStatus } = useAuth();
+  const { darkMode, toggleDarkMode } = useTheme();
+  const { showToast } = useToast();
+  const navigate = useNavigate();
+  const [notifications, setNotifications] = useState(true);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [isDisconnectingWhatsApp, setIsDisconnectingWhatsApp] = useState(false);
+  
+  // Function to disconnect WhatsApp
+  const disconnectWhatsApp = async () => {
+    if (!whatsappConnected || isDisconnectingWhatsApp) return;
+    
+    try {
+      setIsDisconnectingWhatsApp(true);
+      
+      // Get token from localStorage
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+      
+      // Call the logout endpoint
+      const response = await fetch('https://api-ibico.cloudious.net/api/WhatsApp/LogoutInstance', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      const data = await response.json();
+      
+      if (data.status === 'success') {
+        showToast('success', 'WhatsApp disconnected successfully');
+      } else {
+        throw new Error(data.message || 'Failed to disconnect WhatsApp');
+      }
+    } catch (error) {
+      console.error('Error disconnecting WhatsApp:', error);
+      showToast('error', error instanceof Error ? error.message : 'Failed to disconnect WhatsApp');
+    } finally {
+      setIsDisconnectingWhatsApp(false);
+      // Check WhatsApp status to refresh UI
+      checkWhatsAppStatus();
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Profile section - compact with logo fallback */}
+      <div className="flex flex-col items-center justify-center py-6">
+        <div className="w-20 h-20 rounded-full overflow-hidden mb-2">
+          {whatsappConnected && whatsappProfile?.profilePictureUrl ? (
+            <img 
+              src={whatsappProfile.profilePictureUrl}
+              alt="WhatsApp Profile"
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center">
+              <svg width="48" height="48" viewBox="0 0 122.88 122.31">
+                <defs>
+                  <linearGradient id="whatsapp-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#25D366" />
+                    <stop offset="100%" stopColor="#128C7E" />
+                  </linearGradient>
+                </defs>
+                <path fill="url(#whatsapp-gradient)" d="M27.75,0H95.13a27.83,27.83,0,0,1,27.75,27.75V94.57a27.83,27.83,0,0,1-27.75,27.74H27.75A27.83,27.83,0,0,1,0,94.57V27.75A27.83,27.83,0,0,1,27.75,0Z"/>
+                <path fill="#fff" d="M61.44,25.39A35.76,35.76,0,0,0,31.18,80.18L27.74,94.86l14.67-3.44a35.77,35.77,0,1,0,19-66ZM41,95.47,35.1,96.85l.94,4,4.35-1a43.36,43.36,0,0,0,10.46,4l1-4A40,40,0,0,1,41,95.45l0,0ZM21.76,86.53l4,.93,1.37-5.91a39.6,39.6,0,0,1-4.43-10.82l-4,1a44.23,44.23,0,0,0,4.06,10.46l-1,4.35Zm9.68,11.15-8.52,2,2-8.52-4-.93-2,8.51a4.12,4.12,0,0,0,3.08,5,4,4,0,0,0,1.88,0l8.52-2-.94-4.06Zm24-76a40.56,40.56,0,0,1,12,0L68,17.63a44.25,44.25,0,0,0-13.2,0l.63,4.07ZM99.14,38.4l-3.53,2.12a39.89,39.89,0,0,1,4.57,11l4-1a43.75,43.75,0,0,0-5-12.18Zm-69.81-.91A40.29,40.29,0,0,1,37.78,29l-2.47-3.32A43.62,43.62,0,0,0,26,35l3.32,2.47ZM85.1,29a40.11,40.11,0,0,1,8.46,8.45L96.88,35a43.62,43.62,0,0,0-9.3-9.3L85.1,29Zm8.46,55.78a40.11,40.11,0,0,1-8.46,8.45l2.45,3.32a44,44,0,0,0,9.33-9.3l-3.32-2.47ZM67.42,100.6a39.89,39.89,0,0,1-12,0l-.62,4.09a44.18,44.18,0,0,0,13.19,0l-.62-4.09Zm36.76-28.88-4-1A40,40,0,0,1,95.6,81.8l3.53,2.12a43.72,43.72,0,0,0,5.05-12.2Zm-2.84-10.57a39.93,39.93,0,0,1-.45,6l4.07.62a44.18,44.18,0,0,0,0-13.19l-4.07.62a39.8,39.8,0,0,1,.45,6ZM84.2,98.85l-2.12-3.53a39.89,39.89,0,0,1-11,4.57l1,4a43.75,43.75,0,0,0,12.18-5ZM21.55,61.15a41.15,41.15,0,0,1,.44-6l-4.07-.62a44.18,44.18,0,0,0,0,13.19L22,67.13a41.28,41.28,0,0,1-.44-6Zm2.2-22.75A43.83,43.83,0,0,0,18.7,50.59l4,1a40.08,40.08,0,0,1,4.57-11.06L23.75,38.4ZM72,18.41l-1,4A40.08,40.08,0,0,1,82.08,27l2.13-3.53A44,44,0,0,0,72,18.41Zm-21.13,0,1,4A40.08,40.08,0,0,0,40.8,27l-2.12-3.53a44,44,0,0,1,12.2-5.05Z"/>
+              </svg>
+            </div>
+          )}
+        </div>
+        {!whatsappConnected || !whatsappProfile?.profilePictureUrl ? (
+          <span className="text-lg font-bold mb-1" style={{ fontFamily: "'Mabry Pro', sans-serif" }}>WABI</span>
+        ) : null}
+        <div className="inline-flex items-center px-3 py-1 bg-green-50 text-green-700 rounded-full border border-green-200 shadow-sm">
+          <svg className="w-3.5 h-3.5 mr-1.5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M17.924 2.617a.997.997 0 00-.215-.322l-.004-.004A.997.997 0 0017 2h-4a1 1 0 100 2h1.586l-3.293 3.293a1 1 0 001.414 1.414L16 5.414V7a1 1 0 102 0V3a.997.997 0 00-.076-.383z" />
+            <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" />
+          </svg>
+          <span className="font-medium text-sm">
+            {whatsappConnected && whatsappProfile?.phoneNumber ? 
+              whatsappProfile.phoneNumber : 
+              user?.phone || "+923332404969"}
+          </span>
+        </div>
+        
+        {/* WhatsApp Connection Status and Disconnect Button */}
+        {whatsappConnected && (
+          <div className="mt-3">
+            <button
+              onClick={disconnectWhatsApp}
+              disabled={isDisconnectingWhatsApp || whatsappLoading}
+              className="flex items-center justify-center px-3 py-1.5 rounded-full text-white text-xs font-medium shadow-sm transition-all 
+                bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 
+                disabled:opacity-70 disabled:cursor-not-allowed"
+            >
+              {isDisconnectingWhatsApp ? (
+                <>
+                  <svg className="animate-spin h-3 w-3 mr-1 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Disconnecting...
+                </>
+              ) : (
+                <>
+                  <svg className="w-3 h-3 mr-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  Disconnect
+                </>
+              )}
+            </button>
+          </div>
+        )}
+      </div>
+      
+      {/* Green Tip section with info icon - more compact */}
+      <div className="bg-green-50 mx-3 mb-4 rounded-lg p-3">
+        <div className="flex">
+          <div className="flex-shrink-0 mr-2">
+            <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center border-2 border-green-500">
+              <svg className="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+              </svg>
+            </div>
+          </div>
+          <div>
+            <p className="font-medium text-sm text-green-800">Tip</p>
+            <p className="text-xs text-green-700">To avoid having your account banned, do not send more than 200-500 messages per day per instance.</p>
+          </div>
+        </div>
+      </div>
+      
+      {/* Theme section - more compact */}
+      <div className="border-t border-gray-200 dark:border-gray-700">
+        <h3 className="px-3 pt-3 pb-1 font-medium text-gray-900 dark:text-white text-base">Theme</h3>
+        <div className="flex items-center justify-between px-3 py-2">
+          <div className="flex items-center">
+            <svg className="w-5 h-5 text-yellow-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" />
+            </svg>
+            <span className="text-sm text-gray-700 dark:text-gray-300">Light Mode</span>
+          </div>
+          
+          <div className="relative">
+            <input 
+              type="checkbox" 
+              id="theme-toggle"
+              className="sr-only"
+              checked={darkMode}
+              onChange={toggleDarkMode}
+            />
+            <label 
+              htmlFor="theme-toggle"
+              className={`block h-6 w-12 rounded-full cursor-pointer transition-colors duration-200 ease-in-out ${darkMode ? 'bg-gray-400' : 'bg-green-500'}`}
+            >
+              <span 
+                className={`absolute top-[2px] left-[2px] h-5 w-5 rounded-full bg-white shadow-md transform transition-transform duration-200 ease-in-out ${darkMode ? 'translate-x-6' : ''}`}
+              ></span>
+            </label>
+          </div>
+        </div>
+      </div>
+      
+      {/* Notifications section - more compact */}
+      <div className="border-t border-gray-200 dark:border-gray-700">
+        <h3 className="px-3 pt-3 pb-1 font-medium text-gray-900 dark:text-white text-base">Notifications</h3>
+        <div className="flex items-center justify-between px-3 py-2">
+          <div className="flex items-center">
+            <svg className="w-5 h-5 text-red-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z" />
+            </svg>
+            <span className="text-sm text-gray-700 dark:text-gray-300">Notification Sounds</span>
+          </div>
+          
+          <div className="relative">
+            <input 
+              type="checkbox" 
+              id="notifications-toggle"
+              className="sr-only"
+              checked={notifications}
+              onChange={() => setNotifications(!notifications)}
+            />
+            <label 
+              htmlFor="notifications-toggle"
+              className={`block h-6 w-12 rounded-full cursor-pointer transition-colors duration-200 ease-in-out ${notifications ? 'bg-green-500' : 'bg-gray-400'}`}
+            >
+              <span 
+                className={`absolute top-[2px] left-[2px] h-5 w-5 rounded-full bg-white shadow-md transform transition-transform duration-200 ease-in-out ${notifications ? 'translate-x-6' : ''}`}
+              ></span>
+            </label>
+          </div>
+        </div>
+      </div>
+      
+      {/* Logout button - more compact */}
+      <div className="mt-auto pt-3 px-3 pb-4">
+        <button 
+          onClick={() => {
+            showToast('success', 'Logged out successfully');
+            logout();
+            navigate('/login');
+          }}
+          className="w-full bg-red-500 text-white py-2 rounded-md flex items-center justify-center font-medium hover:bg-red-600 transition-colors"
+        >
+          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+          </svg>
+          Logout
+        </button>
+      </div>
     </div>
   );
 };

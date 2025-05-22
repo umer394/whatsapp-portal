@@ -24,6 +24,8 @@ import QRCodeModal from './QRCodeModal';
 interface ChatPanelProps {
   onEscPress: () => void;
 }
+// WhatsApp gradient for reuse
+const whatsappGradient = 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)';
 
 const ChatPanel: React.FC<ChatPanelProps> = ({ onEscPress }) => {
   const { user, whatsappConnected, whatsappProfile, whatsappLoading, checkWhatsAppStatus } = useAuth();
@@ -38,6 +40,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onEscPress }) => {
   const [error, setError] = useState<string | null>(null);
   const [showQRModal, setShowQRModal] = useState(false);
   const statusCheckedRef = useRef(false);
+  const [showQrModal, setShowQrModal] = useState(false);
   
   // Check WhatsApp connection status when component mounts
   useEffect(() => {
@@ -108,6 +111,18 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onEscPress }) => {
     };
   }, [showEmojiPicker]);
   
+    const handleOpenQrModal = () => {
+    // Prevent opening QR modal if WhatsApp is already connected or if we're still loading
+    if (whatsappConnected || whatsappLoading) {
+      return;
+    }
+    
+    // Add a small delay to prevent multiple clicks
+    setTimeout(() => {
+      setShowQrModal(true);
+    }, 300);
+  };
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -269,10 +284,24 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ onEscPress }) => {
               </div>
             </>
           ) : (
-            <div className="flex flex-col items-center">
-              <div className="mb-4 h-16 w-16 animate-spin rounded-full border-4 border-t-4 border-gray-200 border-t-green-500"></div>
-              <p className="text-lg text-gray-600 dark:text-gray-300">Please select a chat to start messaging</p>
-            </div>
+            <>
+                <h1 className="mb-2 text-3xl font-light text-gray-600 dark:text-gray-300">
+                  Use WABI on your computer
+                </h1>
+                <p className="text-gray-500 dark:text-gray-400">
+                  Connect with your phone to use WABI
+                </p>
+                <div className="mt-6 flex justify-center">
+                  <button 
+                    className="flex items-center justify-center rounded-md px-6 py-3 text-white hover:opacity-90"
+                    style={{ background: whatsappGradient }}
+                    onClick={handleOpenQrModal}
+                  >
+                    <FaQrcode className="mr-2" />
+                    Connect with QR code
+                  </button>
+                </div>
+              </>
           )}
         </div>
       </div>

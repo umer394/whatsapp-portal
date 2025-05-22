@@ -31,13 +31,14 @@ const VerticalMenu: React.FC<VerticalMenuProps> = ({
 
   const menuItems = [
     { id: 'contacts', icon: <FaAddressBook size={20} />, label: 'Contacts' },
-    { id: 'chat', icon: <FaComment size={20} />, label: 'Chat' },
     { id: 'campaigns', icon: <FaBullhorn size={20} />, label: 'Campaigns' },
+    // { id: 'chat', icon: <FaComment size={20} />, label: 'Chat' },
     { id: 'analytics', icon: <FaChartBar size={20} />, label: 'Analytics' },
+     { id: 'settings', icon: <FaCog size={20} />, label: 'Settings' },
   ];
 
   const bottomItems = [
-    { id: 'settings', icon: <FaCog size={20} />, label: 'Settings', action: onOpenSettings },
+   
     { id: 'logout', icon: <FaSignOutAlt size={20} />, label: 'Logout', action: handleLogout },
   ];
 

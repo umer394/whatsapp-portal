@@ -5,7 +5,6 @@ import { useTheme } from '../context/ThemeContext';
 import Sidebar from '../components/Sidebar';
 import ChatPanel from '../components/ChatPanel';
 import CampaignChatPanel from '../components/CampaignChatPanel';
-import Settings from '../components/Settings';
 import QRCodeModal from '../components/QRCodeModal';
 import { FaWhatsapp, FaQrcode } from 'react-icons/fa';
 import { Contact } from '../types';
@@ -16,17 +15,12 @@ const whatsappGradient = 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)';
 const Main: React.FC = () => {
   const { darkMode } = useTheme();
   const { checkWhatsAppStatus, whatsappConnected, whatsappProfile, whatsappLoading } = useAuth();
-  const [showSettings, setShowSettings] = useState(false);
   const [showQrConnect, setShowQrConnect] = useState(true);
   const [showQrModal, setShowQrModal] = useState(false);
   const hasCheckedStatus = useRef(false);
   const [activeCampaign, setActiveCampaign] = useState<{ id: string; name: string; contacts: Contact[] } | null>(null);
   const [activeTab, setActiveTab] = useState<string>('contacts');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-
-  const toggleSettings = () => {
-    setShowSettings(!showSettings);
-  };
 
   // Check WhatsApp connection status when component mounts, but only once
   useEffect(() => {
@@ -104,6 +98,19 @@ const Main: React.FC = () => {
   const renderChatPanel = () => {
     console.log("Rendering chat panel, activeTab:", activeTab, "activeCampaign:", activeCampaign);
     
+    // Don't render any chat if settings tab is active
+    if (activeTab === 'settings') {
+      return (
+        <div className="flex h-full flex-col items-center justify-center bg-[#f0f2f5] dark:bg-gray-800">
+          <div className="mx-auto max-w-md text-center">
+            <h1 className="text-xl font-medium text-gray-600 dark:text-gray-300">
+              Select a chat to start messaging
+            </h1>
+          </div>
+        </div>
+      );
+    }
+    
     if (showQrConnect) {
       return (
         <div className="flex h-full flex-col items-center justify-center bg-[#f0f2f5] dark:bg-gray-800">
@@ -178,7 +185,7 @@ const Main: React.FC = () => {
           {/* Left sidebar - around 30% width */}
           <div className="w-[420px] min-w-[320px] border-r border-[#e9edef] dark:border-gray-700">
             <Sidebar 
-              onOpenSettings={toggleSettings} 
+              onOpenSettings={() => setActiveTab('settings')} 
               onChatSelect={handleChatSelect} 
               onCampaignSelect={handleCampaignSelect}
               onTabChange={handleTabChange}
@@ -193,13 +200,6 @@ const Main: React.FC = () => {
           </div>
         </div>
         
-        {/* Settings panel (shown when settings is clicked) */}
-        {showSettings && (
-          <div className="absolute inset-0 z-10 bg-black bg-opacity-50">
-            <Settings onClose={toggleSettings} />
-          </div>
-        )}
-
         {/* QR Code Modal */}
         {showQrModal && <QRCodeModal onClose={handleCloseQrModal} onConnect={handleWhatsAppConnected} />}
 

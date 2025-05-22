@@ -1,3 +1,9 @@
+/**
+ * DEPRECATED: This standalone Settings component has been replaced by the settings tab in Sidebar.tsx
+ * The functionality has been moved to the SettingsContent component inside Sidebar.tsx
+ * This file is kept for reference but is no longer used in the application.
+ */
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -137,10 +143,10 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
     <div className="fixed inset-0 z-20 bg-black bg-opacity-50">
       <div 
         ref={settingsRef}
-        className="absolute right-0 top-0 z-30 h-full w-[400px] bg-white shadow-lg dark:bg-gray-900"
+        className="absolute left-0 top-0 z-30 h-full w-[400px] bg-white shadow-lg dark:bg-gray-900"
       >
         {/* Header */}
-        <div className="flex h-16 items-center justify-between bg-gray-100 px-4 dark:bg-gray-800">
+        {/* <div className="flex h-16 items-center justify-between bg-gray-100 px-4 dark:bg-gray-800">
           <h2 className="text-xl font-medium dark:text-white">Settings</h2>
           <button 
             onClick={onClose}
@@ -148,7 +154,7 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
           >
             <FaTimes size={20} />
           </button>
-        </div>
+        </div> */}
         
         {/* Content */}
         <div className="h-[calc(100%-4rem)] overflow-y-auto">
