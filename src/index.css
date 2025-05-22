@@ -44,3 +44,59 @@ code {
 .animate-scan {
   animation: scan 2s ease-in-out infinite;
 }
+
+/* Add custom styles for Handsontable */
+.hot-table .handsontable {
+  font-family: inherit;
+}
+
+.hot-table .handsontable .ht_master .wtHolder {
+  overflow-x: hidden;
+}
+
+.dark .hot-table .handsontable th {
+  background-color: #2d3748;
+  color: #e2e8f0;
+  border-color: #4a5568;
+}
+
+.dark .hot-table .handsontable td {
+  background-color: #1a202c;
+  color: #e2e8f0;
+  border-color: #4a5568;
+}
+
+.dark .hot-table .handsontable .wtBorder {
+  background-color: #00a884 !important;
+}
+
+.dark .hot-table .handsontable tr:hover td,
+.dark .hot-table .handsontable tr:hover th {
+  background-color: #2d3748;
+}
+
+.hot-table .handsontable th {
+  background-color: #f7f7f7;
+  font-weight: 600;
+}
+
+.hot-table .handsontable .currentRow,
+.hot-table .handsontable .currentCol {
+  background-color: rgba(0, 168, 132, 0.1);
+}
+
+/* Phone number validation styling */
+.hot-table .handsontable td.htInvalid {
+  background-color: rgba(255, 0, 0, 0.1) !important;
+  color: #ff5252;
+}
+
+.dark .hot-table .handsontable td.htInvalid {
+  background-color: rgba(255, 0, 0, 0.2) !important;
+  color: #ff7070;
+}
+
+.hot-table .handsontable td.htPhoneCell {
+  font-family: 'Courier New', monospace;
+  letter-spacing: 1px;
+}

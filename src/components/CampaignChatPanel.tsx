@@ -14,7 +14,7 @@ import {
 import EmojiPicker, { EmojiClickData, Theme } from 'emoji-picker-react';
 
 interface CampaignChatPanelProps {
-  campaign: { id: string; name: string; contacts: Contact[] } | null;
+  campaign: { id: string; name: string; description?: string; contacts: Contact[]; iconUrl?: string } | null;
   onEscPress: () => void;
   onContactDisplay: (name: string) => void;
 }
@@ -158,15 +158,36 @@ const CampaignChatPanel: React.FC<CampaignChatPanelProps> = ({ campaign, onEscPr
           {/* Header */}
           <div className="flex items-center justify-between bg-white px-4 py-2 dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800">
             <div className="flex items-center">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#00a884] text-white mr-3">
-                {campaign.name.charAt(0).toUpperCase()}
-              </div>
+              {campaign.iconUrl ? (
+                <div className="h-10 w-10 rounded-full overflow-hidden mr-3">
+                  <img 
+                    src={campaign.iconUrl} 
+                    alt={campaign.name}
+                    className="h-full w-full object-cover"
+                    onError={(e) => {
+                      // Fallback if image fails to load
+                      e.currentTarget.style.display = 'none';
+                      e.currentTarget.parentElement!.innerHTML = `
+                        <div class="flex h-10 w-10 items-center justify-center rounded-full bg-[#00a884] text-white">
+                          ${campaign.name.charAt(0).toUpperCase()}
+                        </div>
+                      `;
+                    }}
+                  />
+                </div>
+              ) : (
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#00a884] text-white mr-3">
+                  {campaign.name.charAt(0).toUpperCase()}
+                </div>
+              )}
               <div>
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{campaign.name}</h2>
-                <p className="text-xs text-gray-500 dark:text-gray-400">{campaign.contacts.length} contacts</p>
+                {campaign.description && (
+                  <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-1">{campaign.description}</p>
+                )}
               </div>
             </div>
-            <div className="flex items-center gap-4">
+            {/* <div className="flex items-center gap-4">
               <button 
                 className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
                 onClick={() => {
@@ -181,7 +202,7 @@ const CampaignChatPanel: React.FC<CampaignChatPanelProps> = ({ campaign, onEscPr
               <button className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">
                 <FaEllipsisV />
               </button>
-            </div>
+            </div> */}
           </div>
           
           {/* Messages */}

@@ -31,7 +31,7 @@ interface AuthContextType extends AuthState {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // API base URL
-const API_BASE_URL = 'https://v3-wabi.cloudious.net/api/';
+const API_BASE_URL = 'https://api-ibico.cloudious.net/api/';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [authState, setAuthState] = useState<AuthState>({
@@ -110,7 +110,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       
       // Check WhatsApp instance status
-      const statusResponse = await fetch('https://v3-wabi.cloudious.net/api/WhatsApp/InstanceStatus', {
+      const statusResponse = await fetch('https://api-ibico.cloudious.net/api/WhatsApp/InstanceStatus', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -127,7 +127,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Only load profile if we don't already have it or if we were previously disconnected
         if (!whatsappProfile || !whatsappConnected) {
           // Load WhatsApp profile
-          const profileResponse = await fetch('https://v3-wabi.cloudious.net/api/WhatsApp/LoadInstanceProfile', {
+          const profileResponse = await fetch('https://api-ibico.cloudious.net/api/WhatsApp/LoadInstanceProfile', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',

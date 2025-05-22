@@ -37,8 +37,8 @@ const phoneNumberLengths = {
 
 // API endpoints
 const API_ENDPOINTS = {
-  REQUEST_OTP: 'https://v3-wabi.cloudious.net/api/Users/UserSignupOTP',
-  VERIFY_OTP: 'https://v3-wabi.cloudious.net/api/Users/LoginWithOTP'
+  REQUEST_OTP: 'https://api-ibico.cloudious.net/api/Users/UserSignupOTP',
+  VERIFY_OTP: 'https://api-ibico.cloudious.net/api/Users/LoginWithOTP'
 };
 
 // Cooldown times in seconds for resend OTP

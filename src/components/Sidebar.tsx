@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useChat } from '../context/ChatContext';
 import { useToast } from '../context/ToastContext';
@@ -12,11 +12,17 @@ import {
 import { Chat, User, Contact, ContactsResponse } from '../types';
 import NewChatModal from './NewChatModal';
 import VerticalMenu from './VerticalMenu';
+import { HotTable } from '@handsontable/react';
+import { registerAllModules } from 'handsontable/registry';
+import 'handsontable/dist/handsontable.full.min.css';
+
+// Register Handsontable modules
+registerAllModules();
 
 interface SidebarProps {
   onOpenSettings: () => void;
   onChatSelect: () => void;
-  onCampaignSelect?: (campaign: { id: string; name: string; contacts: Contact[] }) => void;
+  onCampaignSelect?: (campaign: { id: string; name: string; description?: string; contacts: Contact[] }) => void;
   onTabChange?: (tab: string) => void;
   activeTab?: string;
   iconHighlightColor?: string;
@@ -30,6 +36,8 @@ const Sidebar: React.FC<SidebarProps> = ({
   activeTab: externalActiveTab,
   iconHighlightColor
 }) => {
+  const contactsContainerRef = useRef<HTMLDivElement>(null);
+  
   const { user, checkWhatsAppStatus } = useAuth();
   const { chats, activeChat, selectChat } = useChat();
   const { showToast } = useToast();
@@ -49,14 +57,42 @@ const Sidebar: React.FC<SidebarProps> = ({
   const googleContactsRef = useRef<HTMLButtonElement>(null);
   const [showCreateCampaignModal, setShowCreateCampaignModal] = useState(false);
   const [campaignSearchQuery, setCampaignSearchQuery] = useState('');
+  const [campaignContactsPage, setCampaignContactsPage] = useState(1);
+  const [campaignPopupSearchQuery, setCampaignPopupSearchQuery] = useState('');
+  const [campaignContacts, setCampaignContacts] = useState<Contact[]>([]);
+  const [loadingCampaignContacts, setLoadingCampaignContacts] = useState(false);
+  const [hasMoreCampaignContacts, setHasMoreCampaignContacts] = useState(false);
   const [selectedCampaignContacts, setSelectedCampaignContacts] = useState<Contact[]>([]);
+  const campaignContactsRef = useRef<HTMLDivElement>(null);
   const [campaignStep, setCampaignStep] = useState(1);
   const [campaignGroupName, setCampaignGroupName] = useState('');
-  const [campaigns, setCampaigns] = useState<{ id: string; name: string; contacts: Contact[] }[]>([]);
+  const [campaignDescription, setCampaignDescription] = useState('');
+  const [campaignNameError, setCampaignNameError] = useState(false);
+  const [campaigns, setCampaigns] = useState<{ id: string; name: string; description?: string; contacts: Contact[]; iconUrl?: string }[]>([]);
   const [activeCampaign, setActiveCampaign] = useState<string | null>(null);
   const [showCampaignDeleteConfirm, setShowCampaignDeleteConfirm] = useState<string | null>(null);
+  const [campaignActiveTab, setCampaignActiveTab] = useState<'contacts' | 'excel'>('contacts');
+  const [tableData, setTableData] = useState<Array<[string, string]>>([['', ''], ['', ''], ['', ''], ['', '']]);
+  
+  // Ensure we always have at least 4 rows in the table
+  const ensureMinimumRows = useCallback((data: Array<[string, string]>) => {
+    const result = [...data];
+    while (result.length < 4) {
+      result.push(['', '']);
+    }
+    return result;
+  }, []);
+  const [campaignIconUrl, setCampaignIconUrl] = useState<string | null>(null);
+  const [uploadingIcon, setUploadingIcon] = useState(false);
+  const [editCampaignId, setEditCampaignId] = useState<string | null>(null);
+  const campaignIconInputRef = useRef<HTMLInputElement>(null);
+  const hotTableRef = useRef(null);
   const campaignClickTimerRef = useRef<NodeJS.Timeout | null>(null);
-
+  const [savingCampaign, setSavingCampaign] = useState(false);
+  const [campaignError, setCampaignError] = useState<string | null>(null);
+  const [loadingCampaignDetails, setLoadingCampaignDetails] = useState(false);
+  const [displayedCampaignContacts, setDisplayedCampaignContacts] = useState<Contact[]>([]);
+  
   // Check WhatsApp status when component mounts - only once
   useEffect(() => {
     const hasCheckedWhatsApp = sessionStorage.getItem('whatsapp_status_checked');
@@ -65,13 +101,42 @@ const Sidebar: React.FC<SidebarProps> = ({
       sessionStorage.setItem('whatsapp_status_checked', 'true');
     }
   }, [checkWhatsAppStatus]);
+  
+  // Handle escape key for closing campaign modal and delete confirmation
+  useEffect(() => {
+    const handleEscapeKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        // Close delete confirmation if it's open
+        if (showCampaignDeleteConfirm) {
+          handleCancelDeleteCampaign();
+        }
+        
+        // Close campaign modal if it's open
+        if (showCreateCampaignModal) {
+          setShowCreateCampaignModal(false);
+          setCampaignStep(1);
+          setSelectedCampaignContacts([]);
+          setCampaignGroupName('');
+          setCampaignDescription('');
+          setCampaignIconUrl(null);
+          setEditCampaignId(null);
+          setCampaignActiveTab('contacts');
+          setCampaignNameError(false);
+          // Reset campaign contacts state
+          setCampaignContacts([]);
+          setCampaignContactsPage(1);
+          setHasMoreCampaignContacts(false);
+        }
+      }
+    };
+    
+    document.addEventListener('keydown', handleEscapeKey);
+    return () => document.removeEventListener('keydown', handleEscapeKey);
+  }, [showCreateCampaignModal, showCampaignDeleteConfirm]);
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
-    // Reset page number when search query changes
-    if (activeTab === 'contacts') {
-      setContactsPage(1);
-    }
+    // Search will be triggered when Enter key is pressed
   };
 
   const handleChatSelect = (chatId: string) => {
@@ -158,23 +223,40 @@ const Sidebar: React.FC<SidebarProps> = ({
     }
   }, [activeTab, contactsPage]);
 
-  // Add a separate effect for search query with debounce
+  // Only fetch contacts when tab is activated, not on every search query change
+  // Search will be triggered with Enter key instead
   useEffect(() => {
-    if (activeTab !== 'contacts') return;
-    
-    const handler = setTimeout(() => {
-      if (contactsPage === 1) {
-        fetchContacts();
-      } else {
-        // Reset to page 1 if searching
-        setContactsPage(1);
-      }
-    }, 500); // 500ms debounce
-    
+    if (activeTab === 'contacts') {
+      fetchContacts();
+    }
+  }, [activeTab]);
+
+  // Handle infinite scrolling with IntersectionObserver
+  useEffect(() => {
+    if (activeTab !== 'contacts' || !hasMoreContacts || contactsLoading) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        // If the last element is visible and we have more contacts to load
+        if (entries[0].isIntersecting && hasMoreContacts && !contactsLoading) {
+          setContactsPage(prev => prev + 1);
+        }
+      },
+      { threshold: 0.5 }
+    );
+
+    // Find the loader element
+    const loaderElement = document.getElementById('contacts-loader');
+    if (loaderElement) {
+      observer.observe(loaderElement);
+    }
+
     return () => {
-      clearTimeout(handler);
+      if (loaderElement) {
+        observer.unobserve(loaderElement);
+      }
     };
-  }, [searchQuery, activeTab]);
+  }, [activeTab, hasMoreContacts, contactsLoading]);
 
   const fetchContacts = async () => {
     try {
@@ -188,7 +270,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       }
 
       const response = await fetch(
-        `https://v3-wabi.cloudious.net/api/Contacts/GetByPagination/?pageNumber=${contactsPage}&pageSize=20&searchTerm=${searchQuery}`,
+        `https://api-ibico.cloudious.net/api/Contacts/GetByPagination/?pageNumber=${contactsPage}&pageSize=50&searchTerm=${searchQuery}`,
         {
           headers: {
             'Authorization': `Bearer ${token}`
@@ -271,10 +353,6 @@ const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
-  const handleLoadMoreContacts = () => {
-    setContactsPage(prev => prev + 1);
-  };
-
   // Helper function to fetch profile picture from WhatsApp API
   const fetchProfilePicture = async (phoneNumber: string): Promise<string | null> => {
     try {
@@ -287,7 +365,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       
       // Call WhatsApp API to get profile picture
       const response = await fetch(
-        `https://v3-wabi.cloudious.net/api/WhatsApp/GetProfilePicture?phoneNumber=${encodeURIComponent(formattedPhone)}`,
+        `https://api-ibico.cloudious.net/api/WhatsApp/GetProfilePicture?phoneNumber=${encodeURIComponent(formattedPhone)}`,
         {
           headers: {
             'Authorization': `Bearer ${token}`
@@ -357,7 +435,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       formData.append('file', file);
 
       // Upload file
-      fetch('https://v3-wabi.cloudious.net/api/Contacts/BulkUpload', {
+      fetch('https://api-ibico.cloudious.net/api/Contacts/BulkUpload', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -409,7 +487,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         }
 
         const response = await fetch(
-          `https://v3-wabi.cloudious.net/api/Contacts/GetByPagination/?pageNumber=1&pageSize=1&searchTerm=`,
+          `https://api-ibico.cloudious.net/api/Contacts/GetByPagination/?pageNumber=1&pageSize=1&searchTerm=`,
           {
             headers: {
               'Authorization': `Bearer ${token}`
@@ -460,7 +538,122 @@ const Sidebar: React.FC<SidebarProps> = ({
     return () => clearInterval(pollInterval);
   };
 
-  const filteredCampaignContacts = contacts.filter(c => getContactDisplayName(c).toLowerCase().includes(campaignSearchQuery.toLowerCase()) || (c.phone1Value && c.phone1Value.includes(campaignSearchQuery)));
+  // Function to fetch contacts for the campaign popup
+  const fetchCampaignContacts = async (page = 1, append = false) => {
+    try {
+      setLoadingCampaignContacts(true);
+      
+      // Get token from localStorage
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      const response = await fetch(
+        `https://api-ibico.cloudious.net/api/Contacts/GetByPagination/?pageNumber=${page}&pageSize=50&searchTerm=${campaignPopupSearchQuery}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      );
+
+      const data: ContactsResponse = await response.json();
+      
+      if (data.status === 'success') {
+        // Process contacts to extract photo if available in the response
+        const processedContacts = data.data.items.map(contact => {
+          // Check if API includes photo field under any known property
+          if (contact.hasOwnProperty('photo')) {
+            return contact;
+          } else if (contact.hasOwnProperty('profilePicture')) {
+            return { ...contact, photo: (contact as any).profilePicture };
+          } else if (contact.hasOwnProperty('avatar')) {
+            return { ...contact, photo: (contact as any).avatar };
+          } else if (contact.hasOwnProperty('image')) {
+            return { ...contact, photo: (contact as any).image };
+          } else if (contact.hasOwnProperty('profilePhoto')) {
+            return { ...contact, photo: (contact as any).profilePhoto };
+          } else if (contact.hasOwnProperty('photoURL')) {
+            return { ...contact, photo: (contact as any).photoURL };
+          } else if (contact.hasOwnProperty('picture')) {
+            return { ...contact, photo: (contact as any).picture };
+          }
+          
+          // Check for nested photo properties
+          for (const key in contact) {
+            if (typeof (contact as any)[key] === 'object' && (contact as any)[key] !== null) {
+              const obj = (contact as any)[key];
+              if (obj.hasOwnProperty('photo') || obj.hasOwnProperty('url') || 
+                  obj.hasOwnProperty('profilePicture') || obj.hasOwnProperty('avatar')) {
+                const photoUrl = obj.photo || obj.url || obj.profilePicture || obj.avatar;
+                return { ...contact, photo: photoUrl };
+              }
+            }
+          }
+          
+          // For contacts without photos, try to fetch from WhatsApp API if they have a phone number
+          if (contact.phone1Value) {
+            // Don't wait for this promise to resolve - we'll update the UI when it does
+            fetchProfilePicture(contact.phone1Value).then(pictureUrl => {
+              if (pictureUrl) {
+                // Update the contact in the state with the WhatsApp profile picture
+                setCampaignContacts(prevContacts => 
+                  prevContacts.map(c => 
+                    c.id === contact.id ? { ...c, photo: pictureUrl } : c
+                  )
+                );
+              }
+            });
+          }
+          
+          return contact;
+        });
+        
+        // Filter out contacts that are already selected
+        const filteredContacts = processedContacts.filter(contact => 
+          !selectedCampaignContacts.some(selected => 
+            selected.id === contact.id || 
+            (selected.phone1Value && contact.phone1Value && 
+             selected.phone1Value === contact.phone1Value)
+          )
+        );
+        
+        // If it's the first page or not appending, replace contacts
+        // Otherwise append to existing contacts for pagination
+        const newCampaignContacts = page === 1 && !append 
+          ? filteredContacts 
+          : [...campaignContacts, ...filteredContacts];
+        
+        setCampaignContacts(newCampaignContacts);
+        
+        // If there's no search query, update the displayed contacts to match
+        if (!campaignPopupSearchQuery.trim()) {
+          setDisplayedCampaignContacts(newCampaignContacts);
+        }
+        
+        // Update pagination state
+        setHasMoreCampaignContacts(data.data.pagination.hasNext);
+        setCampaignContactsPage(page);
+        
+        return newCampaignContacts;
+      } else {
+        throw new Error(data.message || 'Failed to fetch contacts');
+      }
+    } catch (error) {
+      console.error('Error fetching campaign contacts:', error);
+      showToast('error', 'Failed to load contacts');
+      return [];
+    } finally {
+      setLoadingCampaignContacts(false);
+    }
+  };
+
+  // Filter contacts for the campaign popup based on search query
+  const filteredCampaignContacts = campaignContacts.filter(c => 
+    getContactDisplayName(c).toLowerCase().includes(campaignPopupSearchQuery.toLowerCase()) || 
+    (c.phone1Value && c.phone1Value.includes(campaignPopupSearchQuery))
+  );
 
   // Function to handle campaign selection
   const handleCampaignSelect = (campaignId: string) => {
@@ -505,12 +698,42 @@ const Sidebar: React.FC<SidebarProps> = ({
   };
 
   // Function to handle campaign delete
-  const handleDeleteCampaign = (campaignId: string) => {
-    setCampaigns(campaigns.filter(c => c.id !== campaignId));
-    if (activeCampaign === campaignId) {
-      setActiveCampaign(null);
+  const handleDeleteCampaign = async (campaignId: string) => {
+    try {
+      setSavingCampaign(true);
+      
+      // Get token from localStorage
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+      
+      // Send delete request to API
+      const response = await fetch(`https://api-ibico.cloudious.net/api/Campaigns/Delete/${campaignId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || 'Failed to delete campaign');
+      }
+      
+      // Update local state
+      setCampaigns(campaigns.filter(c => c.id !== campaignId));
+      if (activeCampaign === campaignId) {
+        setActiveCampaign(null);
+      }
+      
+      showToast('success', 'Campaign deleted successfully');
+    } catch (error) {
+      showToast('error', error instanceof Error ? error.message : 'Failed to delete campaign');
+    } finally {
+      setSavingCampaign(false);
+      setShowCampaignDeleteConfirm(null);
     }
-    setShowCampaignDeleteConfirm(null);
   };
 
   // Function to handle campaign delete cancel
@@ -594,6 +817,66 @@ const Sidebar: React.FC<SidebarProps> = ({
       console.error('Error opening Google auth window:', error);
       showToast('error', 'Failed to connect to Google. Please try again.');
     }
+  };
+
+  // Campaign icon upload functionality
+  const handleIconClick = () => {
+    if (campaignIconInputRef.current) {
+      campaignIconInputRef.current.click();
+    }
+  };
+
+  const handleIconFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Check if file is an image
+    if (!file.type.startsWith('image/')) {
+      showToast('error', 'Please select an image file');
+      return;
+    }
+
+    // Check file size (2MB limit)
+    const twoMB = 2 * 1024 * 1024; // 2MB in bytes
+    if (file.size > twoMB) {
+      showToast('error', 'Image size must be less than 2MB');
+      return;
+    }
+
+    try {
+      setUploadingIcon(true);
+
+      // Create form data
+      const formData = new FormData();
+      formData.append('file', file);
+
+      // Upload to the server
+      const response = await fetch('https://upload.myskool.app', {
+        method: 'POST',
+        body: formData
+      });
+
+      const data = await response.json();
+      
+      if (data.status === 'success' && data.myresp && data.myresp[0]?.path) {
+        setCampaignIconUrl(data.myresp[0].path);
+      } else {
+        throw new Error('Failed to upload image');
+      }
+    } catch (error) {
+      showToast('error', 'Error uploading image: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    } finally {
+      setUploadingIcon(false);
+      
+      // Clear input so the same file can be selected again if needed
+      if (campaignIconInputRef.current) {
+        campaignIconInputRef.current.value = '';
+      }
+    }
+  };
+
+  const resetCampaignIcon = () => {
+    setCampaignIconUrl(null);
   };
 
   const renderTabContent = () => {
@@ -751,28 +1034,36 @@ const Sidebar: React.FC<SidebarProps> = ({
               </div>
             )}
 
-            {/* Search bar - only show if contacts exist or while loading */}
-            {(contacts.length > 0 || (contactsLoading && contacts.length === 0)) && (
-              <div className="bg-white px-3 py-2 dark:bg-gray-900">
-                <div className="flex items-center rounded-lg bg-[#f0f2f5] px-3 py-1 dark:bg-gray-800">
-                  <div className="flex items-center w-full">
-                    <button className="mr-2 text-[#54656f]">
-                      <FaSearch className="h-4 w-4" />
-                    </button>
-                    <input
-                      type="text"
-                      placeholder="Search Contacts"
-                      className="w-full bg-transparent py-1 outline-none dark:text-white"
-                      value={searchQuery}
-                      onChange={handleSearch}
-                    />
-                  </div>
+            {/* Search bar - always show */}
+            <div className="bg-white px-3 py-2 dark:bg-gray-900">
+              <div className="flex items-center rounded-lg bg-[#f0f2f5] px-3 py-1 dark:bg-gray-800">
+                <div className="flex items-center w-full">
+                  <button className="mr-2 text-[#54656f]">
+                    <FaSearch className="h-4 w-4" />
+                  </button>
+                  <input
+                    type="text"
+                    placeholder="Search Contacts"
+                    className="w-full bg-transparent py-1 outline-none dark:text-white"
+                    value={searchQuery}
+                    onChange={handleSearch}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        setContactsPage(1);
+                        fetchContacts();
+                      }
+                    }}
+                  />
                 </div>
               </div>
-            )}
+            </div>
             
             {/* Contacts list */}
-            <div className="overflow-y-auto flex-1">
+            <div 
+              ref={contactsContainerRef}
+              className="overflow-y-auto flex-1"
+            >
               {contactsLoading && contacts.length === 0 ? (
                 <div className="flex h-full items-center justify-center">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-white"></div>
@@ -860,20 +1151,19 @@ const Sidebar: React.FC<SidebarProps> = ({
                     ))}
                   </div>
                   
+                  {/* Loader at the bottom for infinite scrolling */}
                   {hasMoreContacts && (
-                    <div className="p-4 flex justify-center">
-                      <button 
-                        onClick={handleLoadMoreContacts}
-                        className="px-4 py-2 bg-[#f0f2f5] dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 flex items-center"
-                        disabled={contactsLoading}
-                      >
-                        {contactsLoading ? (
-                          <>
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-700 dark:border-white mr-2"></div>
-                            Loading...
-                          </>
-                        ) : 'Load More'}
-                      </button>
+                    <div id="contacts-loader" className="p-4 flex justify-center">
+                      {contactsLoading ? (
+                        <div className="flex items-center">
+                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-700 dark:border-white mr-2"></div>
+                          <span className="text-sm text-gray-600 dark:text-gray-400">Loading more contacts...</span>
+                        </div>
+                      ) : (
+                        <div className="h-8">
+                          {/* Invisible element for intersection observer */}
+                        </div>
+                      )}
                     </div>
                   )}
                 </>
@@ -904,26 +1194,47 @@ const Sidebar: React.FC<SidebarProps> = ({
 
             {/* Campaigns list */}
             <div className="overflow-y-auto flex-1">
-              {campaigns.length === 0 ? (
+              {campaigns.length === 0 && !campaignsLoading ? (
                 <div className="flex h-full items-center justify-center text-gray-500 dark:text-gray-400">
                   <p>No campaigns created yet.</p>
                 </div>
+              ) : campaignsLoading && campaigns.length === 0 ? (
+                <div className="flex h-full items-center justify-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-white"></div>
+                </div>
               ) : (
                 <div className="divide-y divide-gray-100 dark:divide-gray-800">
-                  {campaigns
-                    .filter(c => c.name.toLowerCase().includes(campaignSearchQuery.toLowerCase()))
-                    .map(campaign => (
+                  {campaigns.map(campaign => (
                       <div 
                         key={campaign.id}
-                        className={`flex cursor-pointer items-center px-3 py-3 hover:bg-[#f0f2f5] dark:hover:bg-gray-800 ${
+                        className={`flex cursor-pointer items-center px-3 py-3 hover:bg-[#f0f2f5] dark:hover:bg-gray-800 group ${
                           activeCampaign === campaign.id ? 'bg-[#f0f2f5] dark:bg-gray-800' : ''
                         }`}
                         onClick={() => handleCampaignClick(campaign.id)}
                       >
                         <div className="mr-3">
-                          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#00a884] text-white dark:bg-[#00a884]">
-                            {campaign.name.charAt(0).toUpperCase()}
-                          </div>
+                          {campaign.iconUrl ? (
+                            <div className="h-12 w-12 rounded-full overflow-hidden">
+                              <img 
+                                src={campaign.iconUrl} 
+                                alt={campaign.name}
+                                className="h-full w-full object-cover"
+                                onError={(e) => {
+                                  // Fallback if image fails to load
+                                  e.currentTarget.style.display = 'none';
+                                  e.currentTarget.parentElement!.innerHTML = `
+                                    <div class="flex h-12 w-12 items-center justify-center rounded-full bg-[#00a884] text-white dark:bg-[#00a884]">
+                                      ${campaign.name.charAt(0).toUpperCase()}
+                                    </div>
+                                  `;
+                                }}
+                              />
+                            </div>
+                          ) : (
+                            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#00a884] text-white dark:bg-[#00a884]">
+                              {campaign.name.charAt(0).toUpperCase()}
+                            </div>
+                          )}
                         </div>
                         
                         <div className="flex-1 min-w-0">
@@ -933,41 +1244,175 @@ const Sidebar: React.FC<SidebarProps> = ({
                             </h3>
                           </div>
                           
-                          <div className="flex items-center">
+                          <div className="flex items-center justify-between">
                             <p className="text-sm text-gray-600 dark:text-gray-400 truncate">
-                              {campaign.contacts.length} contact(s)
+                              {campaign.description || `${campaign.contacts.length} contact(s)`}
                             </p>
+                            
+                            <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <div className="relative group/tooltip">
+                                <button 
+                                  className="p-1 text-gray-500 hover:text-[#00a884] dark:text-gray-400 dark:hover:text-[#00a884] transition-colors"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    // Edit campaign - Load data from API
+                                    setEditCampaignId(campaign.id);
+                                    fetchCampaignDetails(campaign.id);
+                                    setCampaignStep(2); // Go directly to name/icon step
+                                    setShowCreateCampaignModal(true);
+                                  }}
+                                  aria-label="Edit campaign"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                  </svg>
+                                </button>
+                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-200 pointer-events-none z-10">
+                                  Edit
+                                  <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-800"></div>
+                                </div>
+                              </div>
+                              <div className="relative group/tooltip">
+                                <button 
+                                  className="p-1 text-gray-500 hover:text-[#00a884] dark:text-gray-400 dark:hover:text-[#00a884] transition-colors"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    // Add contacts to campaign
+                                    const campaignId = campaign.id;
+                                    setEditCampaignId(campaignId);
+                                    setCampaignStep(1); // Go to contacts selection step
+                                    setCampaignActiveTab('contacts'); // Set contacts tab as active
+                                    setCampaignPopupSearchQuery(''); // Clear any previous search
+                                    setShowCreateCampaignModal(true);
+                                    fetchCampaignDetails(campaignId); // Fetch campaign details with members
+                                  }}
+                                  aria-label="Manage members"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                                  </svg>
+                                </button>
+                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-200 pointer-events-none z-10">
+                                  Manage members
+                                  <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-800"></div>
+                                </div>
+                              </div>
+                              <div className="relative group/tooltip">
+                                <button 
+                                  className="p-1 text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-500 transition-colors"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setShowCampaignDeleteConfirm(campaign.id);
+                                  }}
+                                  aria-label="Delete campaign"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                </button>
+                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover/tooltip:opacity-100 transition-opacity duration-200 pointer-events-none z-10">
+                                  Delete
+                                  <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-800"></div>
+                                </div>
+                              </div>
+                            </div>
                           </div>
                         </div>
 
                         {/* Delete Confirmation Popup */}
                         {showCampaignDeleteConfirm === campaign.id && (
-                          <div className="absolute z-10 right-20 bg-white dark:bg-gray-800 shadow-md rounded-lg p-3 border border-gray-200 dark:border-gray-700">
-                            <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">Delete this campaign?</p>
-                            <div className="flex space-x-2">
-                              <button 
-                                className="px-3 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeleteCampaign(campaign.id);
-                                }}
-                              >
-                                Delete
-                              </button>
-                              <button 
-                                className="px-3 py-1 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs rounded hover:bg-gray-300 dark:hover:bg-gray-600"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleCancelDeleteCampaign();
-                                }}
-                              >
-                                Cancel
-                              </button>
+                          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 backdrop-blur-sm" onClick={(e) => {
+                            if (e.target === e.currentTarget) {
+                              handleCancelDeleteCampaign();
+                            }
+                          }}>
+                            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl overflow-hidden w-full max-w-md mx-4">
+                              {/* Red header */}
+                              <div className="bg-red-500 text-white py-4 px-6">
+                                <h3 className="text-xl font-semibold">Confirm Delete</h3>
+                              </div>
+                              
+                              <div className="p-6">
+                                {/* Warning icon */}
+                                <div className="flex justify-center mb-4">
+                                  <div className="rounded-full bg-red-100 p-3 w-16 h-16 flex items-center justify-center">
+                                    <svg className="h-10 w-10 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                    </svg>
+                                  </div>
+                                </div>
+                                
+                                {/* Confirmation text */}
+                                <h4 className="text-xl text-center text-gray-700 dark:text-gray-200 font-semibold mb-2">Are you sure?</h4>
+                                <p className="text-center text-gray-600 dark:text-gray-300 mb-2">
+                                  You want to delete the Campaign:
+                                </p>
+                                <p className="text-center text-gray-800 dark:text-gray-100 font-medium text-lg mb-4">
+                                  "{campaign.name}"
+                                </p>
+                                <p className="text-center text-gray-500 dark:text-gray-400 text-sm mb-6">
+                                  This action cannot be undone.
+                                </p>
+                                
+                                {/* Buttons */}
+                                <div className="flex gap-3 mt-4">
+                                  <button 
+                                    className="flex-1 py-3 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleCancelDeleteCampaign();
+                                    }}
+                                    disabled={savingCampaign}
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button 
+                                    className={`flex-1 py-3 text-white rounded-md font-medium transition-colors flex items-center justify-center ${
+                                      savingCampaign ? 'bg-red-400 cursor-not-allowed' : 'bg-red-500 hover:bg-red-600'
+                                    }`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDeleteCampaign(campaign.id);
+                                    }}
+                                    disabled={savingCampaign}
+                                  >
+                                    {savingCampaign ? (
+                                      <>
+                                        <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent mr-2"></div>
+                                        Deleting...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <svg className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
+                                        Delete
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
+                              </div>
                             </div>
                           </div>
                         )}
                       </div>
                     ))}
+                  
+                  {/* Loader for infinite scrolling */}
+                  {hasMoreCampaigns && (
+                    <div id="campaigns-loader" className="p-4 flex justify-center">
+                      {campaignsLoading ? (
+                        <div className="flex items-center">
+                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-700 dark:border-white mr-2"></div>
+                          <span className="text-sm text-gray-600 dark:text-gray-400">Loading more campaigns...</span>
+                        </div>
+                      ) : (
+                        <div className="h-8">
+                          {/* Invisible element for intersection observer */}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1001,6 +1446,349 @@ const Sidebar: React.FC<SidebarProps> = ({
       setActiveTab(externalActiveTab);
     }
   }, [externalActiveTab]);
+
+  // Add a new function to save campaign data to the API (after handleCancelDeleteCampaign)
+  const saveCampaign = async (campaignData: { 
+    id?: string; 
+    name: string; 
+    description?: string;
+    contacts: Contact[]; 
+    iconUrl?: string 
+  }) => {
+    try {
+      setSavingCampaign(true);
+      setCampaignError(null);
+      
+      // Get token from localStorage
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      // Prepare data for API with the required format
+      const apiData = {
+        campaign: {
+          id: campaignData.id ? Number(campaignData.id) : 0,
+          name: campaignData.name,
+          description: campaignData.description || '',
+          picture: campaignData.iconUrl || ''
+        },
+        campaignMembers: campaignData.contacts.map(contact => ({
+          name: getContactDisplayName(contact),
+          number: contact.phone1Value || '',
+          photo: contact.photo || null
+        }))
+      };
+
+      // Send request to API
+      const response = await fetch('https://api-ibico.cloudious.net/api/Campaigns/Save', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(apiData)
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to save campaign');
+      }
+      
+      if (data.status === 'error') {
+        throw new Error(data.message || 'Failed to save campaign');
+      }
+      
+      // Return the saved campaign data from API response
+      return {
+        id: (data.data.campaign?.id || data.data.id || campaignData.id || Date.now()).toString(),
+        name: data.data.campaign?.name || data.data.name || campaignData.name,
+        description: data.data.campaign?.description || data.data.description || campaignData.description,
+        contacts: campaignData.contacts, // Keep the original contacts
+        iconUrl: data.data.campaign?.picture || data.data.iconUrl || campaignData.iconUrl
+      };
+      
+    } catch (error) {
+      setCampaignError(error instanceof Error ? error.message : 'An unknown error occurred');
+      showToast('error', error instanceof Error ? error.message : 'Failed to save campaign');
+      throw error;
+    } finally {
+      setSavingCampaign(false);
+    }
+  };
+
+  // State variables for campaign pagination
+  const [campaignsPage, setCampaignsPage] = useState(1);
+  const [campaignsPageSize, setCampaignsPageSize] = useState(50);
+  const [hasMoreCampaigns, setHasMoreCampaigns] = useState(false);
+  const [campaignsLoading, setCampaignsLoading] = useState(false);
+
+  // Add a function to fetch campaigns with pagination
+  const fetchCampaigns = async (page = campaignsPage, append = false) => {
+    try {
+      setCampaignsLoading(true);
+      
+      // Get token from localStorage
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+      
+      // Use GetByPagination endpoint
+      const response = await fetch(
+        `https://api-ibico.cloudious.net/api/Campaigns/GetByPagination/?pageNumber=${page}&pageSize=${campaignsPageSize}&searchTerm=${campaignSearchQuery}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      );
+      
+      const data = await response.json();
+      
+      if (data.status === 'success') {
+                const processedCampaigns = data.data.items.map((campaign: any) => {
+          // Handle both old and new response formats
+          const campaignData = campaign.campaign || campaign;
+          const contactsData = campaign.campaignMembers || campaign.contacts || [];
+          
+          // Create a properly structured campaign object
+          const processedCampaign = {
+            id: campaignData.id.toString(),
+            name: campaignData.name,
+            description: campaignData.description || '',
+            iconUrl: campaignData.picture || campaignData.iconUrl,
+            contacts: contactsData.map((contact: any) => {
+              return {
+                id: contact.contactId || contact.id || Date.now() + Math.random(),
+                firstName: (contact.name || '').split(' ')[0] || '',
+                lastName: (contact.name || '').split(' ').slice(1).join(' ') || '',
+                phone1Value: contact.number || contact.phone,
+                photo: contact.photo || '',
+                // Add other required Contact fields with default values
+                middleName: '',
+                organizationName: '',
+                organizationTitle: '',
+                emailValue: '',
+                phone2Value: '',
+                phone3Value: '',
+                labels: '',
+                businessID: 1,
+                userID: 1,
+                isActive: true,
+                metaAddedBy: '',
+                metaUpdatedBy: '',
+                addedOn: new Date().toISOString(),
+                updatedOn: new Date().toISOString()
+              };
+            })
+          };
+          
+          return processedCampaign;
+        });
+        
+        // If it's the first page or we're not appending, replace campaigns
+        // Otherwise append to existing campaigns for pagination
+        setCampaigns(append ? [...campaigns, ...processedCampaigns] : processedCampaigns);
+        
+        // Update pagination state
+        setHasMoreCampaigns(data.data.pagination.hasNext);
+        
+        // Return the processed campaigns in case we need them elsewhere
+        return processedCampaigns;
+      } else {
+        throw new Error(data.message || 'Failed to fetch campaigns');
+      }
+    } catch (error) {
+      console.error('Error fetching campaigns:', error);
+      showToast('error', 'Failed to load campaigns');
+      return [];
+    } finally {
+      setCampaignsLoading(false);
+    }
+  };
+  
+  // Load more campaigns function
+  const loadMoreCampaigns = () => {
+    if (hasMoreCampaigns && !campaignsLoading) {
+      const nextPage = campaignsPage + 1;
+      setCampaignsPage(nextPage);
+      fetchCampaigns(nextPage, true);
+    }
+  };
+  
+  // Function to fetch campaign details for editing
+  const fetchCampaignDetails = async (campaignId: string) => {
+    try {
+      setLoadingCampaignDetails(true);
+      // Reset campaign contacts to avoid showing old filtered results
+      setCampaignContacts([]);
+      
+      // Get token from localStorage
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+      
+      // Fetch campaign details from the LoadSelectedData endpoint
+      const response = await fetch(
+        `https://api-ibico.cloudious.net/api/Campaigns/LoadSelectedData?id=${campaignId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      );
+      
+      const data = await response.json();
+      
+      if (data.status === 'success') {
+        // Set campaign details
+        setCampaignGroupName(data.data.campaign.name);
+        setCampaignDescription(data.data.campaign.description || '');
+        setCampaignIconUrl(data.data.campaign.picture || null);
+        
+        // Process and set selected contacts
+        if (data.data.campaignMembers && Array.isArray(data.data.campaignMembers)) {
+          const selectedContacts = data.data.campaignMembers.map((member: any) => {
+            return {
+              id: member.contactId || member.id || Date.now() + Math.random(),
+              firstName: (member.name || '').split(' ')[0] || '',
+              lastName: (member.name || '').split(' ').slice(1).join(' ') || '',
+              phone1Value: member.number || member.phone || '',
+              photo: member.photo || '',
+              // Add other required Contact fields with default values
+              middleName: '',
+              organizationName: '',
+              organizationTitle: '',
+              emailValue: '',
+              phone2Value: '',
+              phone3Value: '',
+              labels: '',
+              businessID: 1,
+              userID: 1,
+              isActive: true,
+              metaAddedBy: '',
+              metaUpdatedBy: '',
+              addedOn: new Date().toISOString(),
+              updatedOn: new Date().toISOString()
+            };
+          });
+          
+          setSelectedCampaignContacts(selectedContacts);
+          
+          // Reset pagination and fetch all contacts with blank search term
+          setCampaignContactsPage(1);
+          setCampaignPopupSearchQuery('');
+          fetchCampaignContacts(1, false);
+        }
+      } else {
+        throw new Error(data.message || 'Failed to fetch campaign details');
+      }
+    } catch (error) {
+      console.error('Error fetching campaign details:', error);
+      showToast('error', 'Failed to load campaign details');
+    } finally {
+      setLoadingCampaignDetails(false);
+    }
+  };
+
+  // Add a useEffect to fetch campaigns when the campaigns tab is activated or search query changes
+  useEffect(() => {
+    if (activeTab === 'campaigns') {
+      setCampaignsPage(1);
+      fetchCampaigns(1, false);
+    }
+  }, [activeTab, campaignSearchQuery]);
+  
+  // Fetch contacts when the campaign modal is opened
+  useEffect(() => {
+    if (showCreateCampaignModal && campaignActiveTab === 'contacts') {
+      setCampaignContactsPage(1);
+      setCampaignPopupSearchQuery(''); // Reset popup search when modal opens
+      fetchCampaignContacts(1, false).then(() => {
+        // Initially show all contacts without filtering
+        setDisplayedCampaignContacts(campaignContacts);
+      });
+    }
+  }, [showCreateCampaignModal, campaignActiveTab]);
+  
+  // Only fetch contacts when modal is opened, not on every search query change
+  // Search will be triggered with Enter key instead
+  useEffect(() => {
+    if (showCreateCampaignModal && campaignActiveTab === 'contacts') {
+      setCampaignContactsPage(1);
+      fetchCampaignContacts(1, false);
+    }
+  }, [showCreateCampaignModal, campaignActiveTab]);
+  
+  // Add an effect for campaign infinite scrolling
+  useEffect(() => {
+    if (activeTab !== 'campaigns' || !hasMoreCampaigns || campaignsLoading) return;
+
+    const campaignsObserver = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMoreCampaigns && !campaignsLoading) {
+          loadMoreCampaigns();
+        }
+      },
+      { threshold: 0.5 }
+    );
+
+    const campaignsLoaderElement = document.getElementById('campaigns-loader');
+    if (campaignsLoaderElement) {
+      campaignsObserver.observe(campaignsLoaderElement);
+    }
+
+    return () => {
+      if (campaignsLoaderElement) {
+        campaignsObserver.unobserve(campaignsLoaderElement);
+      }
+    };
+  }, [activeTab, hasMoreCampaigns, campaignsLoading]);
+  
+  // Function to load more campaign contacts
+  const loadMoreCampaignContacts = () => {
+    if (hasMoreCampaignContacts && !loadingCampaignContacts) {
+      const nextPage = campaignContactsPage + 1;
+      fetchCampaignContacts(nextPage, true);
+    }
+  };
+
+  // Add an effect for campaign contacts infinite scrolling
+  useEffect(() => {
+    if (!showCreateCampaignModal || campaignActiveTab !== 'contacts' || !hasMoreCampaignContacts || loadingCampaignContacts) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMoreCampaignContacts && !loadingCampaignContacts) {
+          loadMoreCampaignContacts();
+        }
+      },
+      { threshold: 0.5 }
+    );
+
+    const loaderElement = document.getElementById('campaign-contacts-loader');
+    if (loaderElement) {
+      observer.observe(loaderElement);
+    }
+
+    return () => {
+      if (loaderElement) {
+        observer.unobserve(loaderElement);
+      }
+    };
+  }, [showCreateCampaignModal, campaignActiveTab, hasMoreCampaignContacts, loadingCampaignContacts]);
+
+  // Update the useEffect that reacts to campaigns contacts changes around line 1979-1990
+  // Add this effect to update displayed contacts whenever campaignContacts changes
+  useEffect(() => {
+    if (!campaignPopupSearchQuery.trim()) {
+      // If no search query, show all contacts
+      setDisplayedCampaignContacts(campaignContacts);
+    }
+  }, [campaignContacts, campaignPopupSearchQuery]);
 
   return (
     <div className="flex h-full">
@@ -1062,124 +1850,492 @@ const Sidebar: React.FC<SidebarProps> = ({
         
         {/* Create Campaign Modal */}
         {showCreateCampaignModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+          <div 
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40 backdrop-blur-sm"
+            // Removed onClick handler to prevent closing when clicking outside the modal
+          >
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-0 overflow-hidden dark:bg-gray-800">
-              {campaignStep === 1 ? (
+                                {campaignStep === 1 ? (
                 <>
+                  {/* Loading overlay */}
+                  {loadingCampaignDetails && (
+                    <div className="absolute inset-0 z-10 bg-white bg-opacity-80 dark:bg-gray-800 dark:bg-opacity-80 flex items-center justify-center">
+                      <div className="flex flex-col items-center">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#00a884]"></div>
+                        <p className="mt-4 text-gray-700 dark:text-gray-300 font-medium">Loading campaign data...</p>
+                      </div>
+                    </div>
+                  )}
+                  
                   {/* Header */}
                   <div className="px-6 pt-6 pb-2 border-b border-gray-200 dark:border-gray-700">
-                    <h2 className="text-lg font-semibold text-gray-800 dark:text-white mb-2">New Campaign</h2>
-                    {/* Selected contacts chips */}
-                    {selectedCampaignContacts.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mb-2">
-                        {selectedCampaignContacts.map(contact => (
-                          <div key={contact.id} className="flex items-center bg-[#00a884] text-white rounded-full px-3 py-1 text-sm">
-                            {getContactDisplayName(contact)}
-                            <button
-                              className="ml-2 text-white hover:text-red-400 focus:outline-none"
-                              onClick={() => setSelectedCampaignContacts(selectedCampaignContacts.filter(c => c.id !== contact.id))}
-                              title="Remove"
-                            >
-                              &times;
-                            </button>
+                    <div className="flex justify-between items-center mb-4">
+                      <h2 className="text-lg font-semibold text-gray-800 dark:text-white">{editCampaignId ? 'Edit Campaign' : 'New Campaign'}</h2>
+                      
+                      {/* Show number of selected members */}
+                      {selectedCampaignContacts.length > 0 && (
+                        <div className="flex items-center">
+                          <div className="bg-[#00a884] text-white rounded-full px-4 py-1 text-sm font-medium">
+                            {selectedCampaignContacts.length} member{selectedCampaignContacts.length !== 1 ? 's' : ''} selected
                           </div>
-                        ))}
+                          {/* <button
+                            className="ml-2 text-sm text-gray-500 hover:text-red-500 focus:outline-none dark:text-gray-400"
+                            onClick={() => setSelectedCampaignContacts([])}
+                          >
+                            Clear
+                          </button> */}
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Tabs */}
+                    <div className="flex border-b border-gray-200 dark:border-gray-700 mb-4">
+                      <button
+                        className={`px-4 py-2 font-medium text-sm -mb-px ${
+                          campaignActiveTab === 'contacts'
+                            ? 'border-b-2 border-[#00a884] text-[#00a884]'
+                            : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                        }`}
+                        onClick={() => setCampaignActiveTab('contacts')}
+                      >
+                        Contacts
+                      </button>
+                      <button
+                        className={`px-4 py-2 font-medium text-sm -mb-px ${
+                          campaignActiveTab === 'excel'
+                            ? 'border-b-2 border-[#00a884] text-[#00a884]'
+                            : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                        }`}
+                        onClick={() => setCampaignActiveTab('excel')}
+                      >
+                        Excel
+                      </button>
+                    </div>
+
+                    {/* Search input - only for contacts tab */}
+                    {campaignActiveTab === 'contacts' && (
+                      <div className="relative mb-2">
+                        <input
+                          type="text"
+                          placeholder="Search name or number"
+                          className="w-full rounded-md bg-gray-100 text-gray-800 placeholder-gray-500 px-4 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-[#00a884] border border-transparent focus:border-[#00a884] dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
+                          value={campaignPopupSearchQuery}
+                          onChange={e => setCampaignPopupSearchQuery(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              setCampaignContactsPage(1);
+                              fetchCampaignContacts(1, false).then(() => {
+                                // Apply filtering only after the fetch has completed
+                                const filtered = campaignContacts.filter(c => 
+                                  getContactDisplayName(c).toLowerCase().includes(campaignPopupSearchQuery.toLowerCase()) || 
+                                  (c.phone1Value && c.phone1Value.includes(campaignPopupSearchQuery))
+                                );
+                                setDisplayedCampaignContacts(filtered);
+                              });
+                            }
+                          }}
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4-4m0 0A7 7 0 104 4a7 7 0 0013 13z" />
+                          </svg>
+                        </span>
                       </div>
                     )}
-                    <div className="relative mb-2">
-                      <input
-                        type="text"
-                        placeholder="Search name or number"
-                        className="w-full rounded-md bg-gray-100 text-gray-800 placeholder-gray-500 px-4 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-[#00a884] border border-transparent focus:border-[#00a884] dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
-                        value={campaignSearchQuery}
-                        onChange={e => setCampaignSearchQuery(e.target.value)}
-                      />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4-4m0 0A7 7 0 104 4a7 7 0 0013 13z" />
-                        </svg>
-                      </span>
-                    </div>
                   </div>
-                  {/* Contacts List */}
-                  <div className="max-h-96 overflow-y-auto bg-white px-2 py-2 dark:bg-gray-800">
-                    {filteredCampaignContacts.length === 0 ? (
-                      <div className="text-center text-gray-500 py-8 dark:text-gray-400">No contacts found</div>
-                    ) : (
-                      filteredCampaignContacts.map(contact => {
-                        const isSelected = selectedCampaignContacts.some(c => c.id === contact.id);
-                        return (
-                          <div
-                            key={contact.id}
-                            className={`flex items-center px-4 py-3 hover:bg-gray-100 rounded-lg cursor-pointer dark:hover:bg-gray-700 ${isSelected ? 'bg-gray-100 dark:bg-gray-700' : ''}`}
-                            onClick={() => {
-                              if (isSelected) {
-                                setSelectedCampaignContacts(selectedCampaignContacts.filter(c => c.id !== contact.id));
-                              } else {
-                                setSelectedCampaignContacts([...selectedCampaignContacts, contact]);
+                  
+                  {/* Tab Content */}
+                  {campaignActiveTab === 'excel' ? (
+                    <div className="px-6 py-6">
+                      <div className="mb-3">
+                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Add contact information below or paste multiple entries at once
+                        </p>
+                        <div className="border border-gray-300 rounded dark:border-gray-700 overflow-hidden">
+                          <HotTable
+                            ref={hotTableRef}
+                            data={tableData}
+                            colHeaders={['Name', 'Number']}
+                            afterGetColHeader={(col, TH) => {
+                              if (col === 1) {
+                                // Add tooltip to phone number column
+                                TH.setAttribute('title', 'Enter numbers only. Use + sign only at the beginning if needed.');
                               }
                             }}
-                          >
-                            <div className="flex-shrink-0 mr-3">
-                              {contact.photo ? (
-                                <div className="h-10 w-10 rounded-full overflow-hidden">
-                                  <img 
-                                    src={contact.photo && contact.photo.includes('googleusercontent.com') 
-                                      ? '/placeholder-avatar.png' // Use a placeholder for Google photos that won't load
-                                      : contact.photo} 
-                                    alt={getContactDisplayName(contact)}
-                                    className="h-full w-full object-cover"
-                                    onError={(e) => {
-                                      // Image failed to load, replace with fallback avatar
-                                      e.currentTarget.style.display = 'none';
-                                      e.currentTarget.parentElement!.innerHTML = `
-                                        <div class="h-10 w-10 rounded-full bg-gray-300 text-gray-700 font-bold flex items-center justify-center dark:bg-gray-600 dark:text-white">
-                                          ${getContactDisplayName(contact).charAt(0).toUpperCase()}
-                                        </div>
-                                      `;
+                            rowHeaders={true}
+                            height={200}
+                            licenseKey="non-commercial-and-evaluation"
+                            stretchH="all"
+                            contextMenu={true}
+                            className="hot-table"
+                            columns={[
+                              {}, // Name column - no specific validation
+                              {
+                                // Phone number column with validation
+                                type: 'text',
+                                validator: function(value, callback) {
+                                  // Allow empty values
+                                  if (value === '' || value === null || value === undefined) {
+                                    callback(true);
+                                    return;
+                                  }
+                                  
+                                  const phoneRegex = /^(\+?)[0-9]+$/;
+                                  const isValid = phoneRegex.test(value);
+                                  
+                                  callback(isValid);
+                                },
+                                allowInvalid: false,
+                                className: 'htPhoneCell'
+                              }
+                            ]}
+                            beforeChange={(changes, source) => {
+                              if (changes && changes.length > 0) {
+                                // Type assertion to tell TypeScript this is an array
+                                const changeArray = changes as [number, string | number, any, any][];
+                                
+                                for (const [row, prop, oldValue, newValue] of changeArray) {
+                                  // For phone column (index 1), enforce phone format
+                                  if (prop === 1 && typeof newValue === 'string' && newValue !== '') {
+                                    // If not valid format, reject the change
+                                    if (!/^(\+?)[0-9]*$/.test(newValue)) {
+                                      // Safe access with type checking
+                                      if (changeArray[0] && changeArray[0].length >= 4) {
+                                        changeArray[0][3] = oldValue;
+                                      }
+                                      return false;
+                                    }
+                                    
+                                    // If there's a + sign, make sure it's only at the beginning
+                                    if (newValue.indexOf('+') > 0) {
+                                      // Safe access with type checking
+                                      if (changeArray[0] && changeArray[0].length >= 4) {
+                                        changeArray[0][3] = oldValue;
+                                      }
+                                      return false;
+                                    }
+                                  }
+                                }
+                              }
+                              
+                              return true;
+                            }}
+                            afterChange={(changes) => {
+                              if (changes) {
+                                const updatedData = [...tableData];
+                                changes.forEach(([row, prop, oldValue, newValue]) => {
+                                  if (typeof row === 'number' && (prop === 0 || prop === 1)) {
+                                    // Ensure the row exists in updatedData
+                                    while (row >= updatedData.length) {
+                                      updatedData.push(['', '']);
+                                    }
+                                    // Update the cell value
+                                    updatedData[row][prop as 0 | 1] = newValue;
+                                  }
+                                });
+                                setTableData(updatedData);
+                              }
+                            }}
+                            beforeKeyDown={(event) => {
+                              const hotInstance = (hotTableRef.current as any)?.hotInstance;
+                              if (!hotInstance) return;
+                              
+                              const selectedCell = hotInstance.getSelected();
+                              if (!selectedCell || selectedCell.length === 0) return;
+                              
+                              // Get current row and column
+                              const [row, col] = selectedCell[0];
+                              const isLastRow = row === tableData.length - 1;
+                              const isLastColumn = col === 1; // Number column is index 1
+                              
+                              // Handle Enter key
+                              if (event.key === 'Enter') {
+                                if (isLastRow) {
+                                  // Add new row and move to the first column of the new row
+                                  setTableData([...tableData, ['', '']]);
+                                  // Let the default behavior happen (moving to the next row)
+                                }
+                              }
+                              
+                              // Handle Tab key
+                              if (event.key === 'Tab' && !event.shiftKey && isLastRow && isLastColumn) {
+                                // Add a new row when tabbing from the last cell
+                                setTableData([...tableData, ['', '']]);
+                              }
+                            }}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex justify-between">
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          <span className="font-medium">Tip:</span> Copy/paste multiple rows from spreadsheets
+                        </p>
+                        {/* <button 
+                          className="text-xs text-[#00a884] hover:underline"
+                          onClick={() => {
+                            const filtered = tableData.filter(([name, phone]) => name || phone);
+                            // Use ensureMinimumRows to make sure we always have at least 4 rows
+                            setTableData(ensureMinimumRows(filtered));
+                          }}
+                        >
+                          Clean empty rows
+                        </button> */}
+                      </div>
+                    </div>
+                  ) : (
+                    <div 
+                      ref={campaignContactsRef}
+                      className="max-h-96 overflow-y-auto bg-white px-2 py-2 dark:bg-gray-800"
+                    >
+                      {loadingCampaignContacts && campaignContacts.length === 0 && selectedCampaignContacts.length === 0 ? (
+                        <div className="flex items-center justify-center py-8">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#00a884]"></div>
+                        </div>
+                      ) : (
+                        <>
+                          {/* Show selected contacts at the top with heading */}
+                          {selectedCampaignContacts.length > 0 && (
+                            <div className="mb-4">
+                              <div className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg mb-2 dark:bg-gray-700 dark:text-gray-300">
+                                Selected Members ({selectedCampaignContacts.length})
+                              </div>
+                              <div className="divide-y divide-gray-100 dark:divide-gray-700">
+                                {selectedCampaignContacts.map(contact => (
+                                  <div
+                                    key={contact.id}
+                                    className="flex items-center px-4 py-3 hover:bg-gray-100 rounded-lg cursor-pointer dark:hover:bg-gray-700 bg-gray-50 dark:bg-gray-750"
+                                    onClick={() => {
+                                      setSelectedCampaignContacts(selectedCampaignContacts.filter(c => c.id !== contact.id));
                                     }}
-                                    referrerPolicy="no-referrer"
-                                    crossOrigin="anonymous"
-                                  />
+                                  >
+                                    <div className="flex-shrink-0 mr-3">
+                                      {contact.photo ? (
+                                        <div className="h-10 w-10 rounded-full overflow-hidden">
+                                          <img 
+                                            src={contact.photo == ''
+                                              ? '/placeholder-avatar.png' 
+                                              : contact.photo} 
+                                            alt={getContactDisplayName(contact)}
+                                            className="h-full w-full object-cover"
+                                            onError={(e) => {
+                                              e.currentTarget.style.display = 'none';
+                                              e.currentTarget.parentElement!.innerHTML = `
+                                                <div class="h-10 w-10 rounded-full bg-gray-300 text-gray-700 font-bold flex items-center justify-center dark:bg-gray-600 dark:text-white">
+                                                  ${getContactDisplayName(contact).charAt(0).toUpperCase()}
+                                                </div>
+                                              `;
+                                            }}
+                                            referrerPolicy="no-referrer"
+                                            crossOrigin="anonymous"
+                                          />
+                                        </div>
+                                      ) : (
+                                        <div className="h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center text-gray-700 font-bold dark:bg-gray-600 dark:text-white">
+                                          {getContactDisplayName(contact).charAt(0).toUpperCase()}
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="text-gray-900 font-medium truncate dark:text-white">{getContactDisplayName(contact)}</div>
+                                      <div className="text-xs text-gray-500 truncate dark:text-gray-400">{contact.phone1Value || contact.emailValue || 'No contact info'}</div>
+                                    </div>
+                                    <div className="ml-2">
+                                      <span className="h-5 w-5 flex items-center justify-center rounded-full bg-[#00a884] text-white">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                        </svg>
+                                      </span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Separator if we have both selected and unselected contacts */}
+                          {selectedCampaignContacts.length > 0 && displayedCampaignContacts.length > 0 && (
+                            <div className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg mb-2 dark:bg-gray-700 dark:text-gray-300">
+                              Available Contacts
+                            </div>
+                          )}
+                          
+                                                        {/* Show available contacts */}
+                              {displayedCampaignContacts.length === 0 && campaignContacts.length === 0 ? (
+                                <div className="text-center text-gray-500 py-8 dark:text-gray-400">
+                                  {campaignSearchQuery ? 'No matching contacts found' : 'No contacts found'}
                                 </div>
                               ) : (
-                                <div className="h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center text-gray-700 font-bold dark:bg-gray-600 dark:text-white">
-                                  {getContactDisplayName(contact).charAt(0).toUpperCase()}
+                                <div className="divide-y divide-gray-100 dark:divide-gray-700">
+                                  {displayedCampaignContacts.map(contact => {
+                                    // Check if this contact is already in the selected list
+                                    const isSelected = selectedCampaignContacts.some(
+                                      selected => selected.id === contact.id || 
+                                      (selected.phone1Value && contact.phone1Value && 
+                                       selected.phone1Value === contact.phone1Value)
+                                    );
+                                    
+                                    return (
+                                      <div
+                                        key={contact.id}
+                                        className={`flex items-center px-4 py-3 hover:bg-gray-100 rounded-lg cursor-pointer dark:hover:bg-gray-700 ${
+                                          isSelected ? 'bg-gray-50 dark:bg-gray-750' : ''
+                                        }`}
+                                        onClick={() => {
+                                          if (isSelected) {
+                                            // Remove from selected if already selected
+                                            setSelectedCampaignContacts(
+                                              selectedCampaignContacts.filter(c => 
+                                                c.id !== contact.id && 
+                                                (c.phone1Value !== contact.phone1Value || !c.phone1Value || !contact.phone1Value)
+                                              )
+                                            );
+                                          } else {
+                                            // Add to selected if not already selected
+                                            setSelectedCampaignContacts([...selectedCampaignContacts, contact]);
+                                          }
+                                        }}
+                                      >
+                                        <div className="flex-shrink-0 mr-3">
+                                          {contact.photo ? (
+                                            <div className="h-10 w-10 rounded-full overflow-hidden">
+                                              <img 
+                                                src={contact.photo == ''
+                                                  ? '/placeholder-avatar.png' 
+                                                  : contact.photo} 
+                                                alt={getContactDisplayName(contact)}
+                                                className="h-full w-full object-cover"
+                                                onError={(e) => {
+                                                  e.currentTarget.style.display = 'none';
+                                                  e.currentTarget.parentElement!.innerHTML = `
+                                                    <div class="h-10 w-10 rounded-full bg-gray-300 text-gray-700 font-bold flex items-center justify-center dark:bg-gray-600 dark:text-white">
+                                                      ${getContactDisplayName(contact).charAt(0).toUpperCase()}
+                                                    </div>
+                                                  `;
+                                                }}
+                                                referrerPolicy="no-referrer"
+                                                crossOrigin="anonymous"
+                                              />
+                                            </div>
+                                          ) : (
+                                            <div className="h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center text-gray-700 font-bold dark:bg-gray-600 dark:text-white">
+                                              {getContactDisplayName(contact).charAt(0).toUpperCase()}
+                                            </div>
+                                          )}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                          <div className="text-gray-900 font-medium truncate dark:text-white">{getContactDisplayName(contact)}</div>
+                                          <div className="text-xs text-gray-500 truncate dark:text-gray-400">{contact.phone1Value || contact.emailValue || 'No contact info'}</div>
+                                        </div>
+                                        <div className="ml-2">
+                                          {isSelected ? (
+                                            <span className="h-5 w-5 flex items-center justify-center rounded-full bg-[#00a884] text-white">
+                                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                              </svg>
+                                            </span>
+                                          ) : (
+                                            <span className="h-5 w-5 flex items-center justify-center rounded-full border border-gray-500"></span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                            </div>
+                          )}
+                          
+                          {/* Loader for infinite scrolling */}
+                          {hasMoreCampaignContacts && (
+                            <div 
+                              id="campaign-contacts-loader" 
+                              className="py-4 flex justify-center"
+                            >
+                              {loadingCampaignContacts ? (
+                                <div className="flex items-center">
+                                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-[#00a884] mr-2"></div>
+                                  <span className="text-sm text-gray-600 dark:text-gray-400">Loading more contacts...</span>
+                                </div>
+                              ) : (
+                                <div className="h-4">
+                                  {/* Invisible element for intersection observer */}
                                 </div>
                               )}
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-gray-900 font-medium truncate dark:text-white">{getContactDisplayName(contact)}</div>
-                              <div className="text-xs text-gray-500 truncate dark:text-gray-400">{contact.phone1Value || contact.emailValue || 'No contact info'}</div>
-                            </div>
-                            <div className="ml-2">
-                              {isSelected ? (
-                                <span className="h-5 w-5 flex items-center justify-center rounded-full bg-[#00a884] text-white">
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                                  </svg>
-                                </span>
-                              ) : (
-                                <span className="h-5 w-5 flex items-center justify-center rounded-full border border-gray-500"></span>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
+                  
                   {/* Footer Buttons */}
                   <div className="flex justify-end gap-2 bg-white px-6 py-4 border-t border-gray-200 dark:bg-gray-800 dark:border-gray-700">
                     <button
                       className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
-                      onClick={() => { setShowCreateCampaignModal(false); setCampaignStep(1); setSelectedCampaignContacts([]); setCampaignGroupName(''); }}
+                      onClick={() => { 
+                        setShowCreateCampaignModal(false); 
+                        setCampaignStep(1); 
+                        setSelectedCampaignContacts([]); 
+                        setCampaignGroupName('');
+                        setCampaignDescription('');
+                        setCampaignIconUrl(null);
+                        setEditCampaignId(null);
+                        setCampaignActiveTab('contacts');
+                        setCampaignNameError(false);
+                        // Reset campaign contacts state
+                        setCampaignContacts([]);
+                        setCampaignContactsPage(1);
+                        setCampaignPopupSearchQuery('');
+                        setHasMoreCampaignContacts(false);
+                      }}
                     >
                       Cancel
                     </button>
                     <button
                       className="px-4 py-2 bg-[#00a884] text-white rounded hover:bg-[#008f6f]"
-                      onClick={() => setCampaignStep(2)}
-                      disabled={selectedCampaignContacts.length === 0}
+                      onClick={() => {
+                        // If Excel tab is active, convert table data to contacts
+                        if (campaignActiveTab === 'excel') {
+                          // Filter out empty rows
+                          const validRows = tableData.filter(([name, phone]) => name.trim() || phone.trim());
+                          
+                          // if (validRows.length === 0) {
+                          //   return; // Don't proceed if no valid data
+                          // }
+                          
+                          // Convert table rows to Contact objects
+                          const tableContacts: Contact[] = validRows.map(([name, phone], index) => ({
+                            id: Date.now() + index, // Generate unique IDs
+                            firstName: name,
+                            lastName: '',
+                            middleName: '',
+                            organizationName: '',
+                            organizationTitle: '',
+                            emailValue: '',
+                            phone1Value: phone,
+                            phone2Value: '',
+                            phone3Value: '',
+                            labels: 'excel-import',
+                            businessID: 1,
+                            userID: 1,
+                            isActive: true,
+                            metaAddedBy: 'excel-import',
+                            metaUpdatedBy: 'excel-import',
+                            addedOn: new Date().toISOString(),
+                            updatedOn: new Date().toISOString()
+                          }));
+                          
+                          // Add these contacts to the selectedCampaignContacts
+                          setSelectedCampaignContacts([...selectedCampaignContacts, ...tableContacts]);
+                        }
+                        
+                        // Advance to the next step
+                        setCampaignStep(2);
+                      }}
+                      disabled={
+                        campaignActiveTab === 'contacts' 
+                          ? selectedCampaignContacts.length === 0 && !loadingCampaignDetails
+                          : false // Allow Next button to be clicked even if Excel is empty
+                      }
                     >
                       Next
                     </button>
@@ -1189,75 +2345,269 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <>
                   {/* Group Details Step */}
                   <div className="px-6 pt-6 pb-2 border-b border-gray-200 dark:border-gray-700">
-                    <h2 className="text-lg font-semibold text-gray-800 dark:text-white mb-2">New Campaign</h2>
-                    {/* Selected contacts chips */}
+                    <h2 className="text-lg font-semibold text-gray-800 dark:text-white mb-2">{editCampaignId ? 'Edit Campaign' : 'New Campaign'}</h2>
+                    {/* Show number of selected members */}
                     {selectedCampaignContacts.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mb-2">
-                        {selectedCampaignContacts.map(contact => (
-                          <div key={contact.id} className="flex items-center bg-[#00a884] text-white rounded-full px-3 py-1 text-sm">
-                            {getContactDisplayName(contact)}
-                          </div>
-                        ))}
+                      <div className="mb-2">
+                        <div className="bg-[#00a884] text-white rounded-full px-3 py-1 text-sm font-medium inline-block">
+                          {selectedCampaignContacts.length} member{selectedCampaignContacts.length !== 1 ? 's' : ''} selected
+                        </div>
                       </div>
                     )}
                   </div>
                   <div className="px-6 py-4 bg-white dark:bg-gray-800">
-                    {/* Campaign icon placeholder */}
+                    {/* Campaign icon upload */}
                     <div className="mb-4 flex items-center gap-3">
-                      <div className="h-12 w-12 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 text-xl cursor-pointer border border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-400">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
+                      <div 
+                        className="h-12 w-12 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 text-xl cursor-pointer border border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-400 relative overflow-hidden"
+                        onClick={handleIconClick}
+                      >
+                        {uploadingIcon ? (
+                          <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
+                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                          </div>
+                        ) : campaignIconUrl ? (
+                          <>
+                            <img 
+                              src={campaignIconUrl} 
+                              alt="Campaign icon" 
+                              className="h-full w-full object-cover"
+                            />
+                            <div 
+                              className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-50 transition-opacity flex items-center justify-center opacity-0 hover:opacity-100"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                resetCampaignIcon();
+                              }}
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </div>
+                          </>
+                        ) : (
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                          </svg>
+                        )}
                       </div>
-                      <span className="text-gray-500 dark:text-gray-400">Add campaign icon <span className="text-xs">(optional)</span></span>
+                      <div>
+                        <span className="text-gray-500 dark:text-gray-400">
+                          {campaignIconUrl ? 'Change icon' : 'Add campaign icon'} <span className="text-xs">(optional)</span>
+                        </span>
+                        {!campaignIconUrl && (
+                          <p className="text-xs text-gray-400 dark:text-gray-500">Images up to 2MB</p>
+                        )}
+                      </div>
+                      <input 
+                        ref={campaignIconInputRef}
+                        type="file"
+                        className="hidden"
+                        accept="image/*"
+                        onChange={handleIconFileChange}
+                      />
                     </div>
                     {/* Campaign name input */}
                     <div className="mb-4">
-                      <label className="block text-gray-600 mb-1 text-sm dark:text-gray-400">Provide a campaign name</label>
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="block text-gray-600 text-sm dark:text-gray-400">
+                          Provide a campaign name <span className="text-red-500">*</span>
+                        </label>
+                        {campaignNameError && (
+                          <span className="text-xs text-red-500">Campaign name is required</span>
+                        )}
+                      </div>
                       <input
                         type="text"
-                        className="w-full rounded-md bg-gray-100 text-gray-800 placeholder-gray-500 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#00a884] border border-transparent focus:border-[#00a884] dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
+                        className={`w-full rounded-md bg-gray-100 text-gray-800 placeholder-gray-500 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#00a884] 
+                          border ${campaignNameError ? 'border-red-500' : 'border-transparent'} 
+                          focus:border-[#00a884] dark:bg-gray-700 dark:text-white dark:placeholder-gray-400`}
                         placeholder="Campaign name"
                         value={campaignGroupName}
-                        onChange={e => setCampaignGroupName(e.target.value)}
+                        onChange={e => {
+                          setCampaignGroupName(e.target.value);
+                          if (e.target.value.trim()) {
+                            setCampaignNameError(false);
+                          }
+                        }}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' && !savingCampaign && campaignGroupName.trim()) {
+                            e.preventDefault();
+                            
+                            // Simulate clicking the Create/Update button
+                            const handleSaveCampaign = async () => {
+                              // Validate campaign name
+                              if (!campaignGroupName.trim()) {
+                                setCampaignNameError(true);
+                                return;
+                              }
+                              
+                              // Prepare campaign data
+                              const campaignData = {
+                                id: editCampaignId || undefined,
+                                name: campaignGroupName.trim(),
+                                description: campaignDescription.trim(),
+                                contacts: selectedCampaignContacts,
+                                iconUrl: campaignIconUrl || undefined
+                              };
+                              
+                              try {
+                                // Save to API
+                                const savedCampaign = await saveCampaign(campaignData);
+                                
+                                // Reset and close modal first for better UX
+                                setShowCreateCampaignModal(false);
+                                setCampaignStep(1);
+                                setSelectedCampaignContacts([]);
+                                setCampaignGroupName('');
+                                setCampaignIconUrl(null);
+                                setEditCampaignId(null);
+                                setCampaignActiveTab('contacts');
+                                setCampaignNameError(false);
+                                
+                                if (editCampaignId) {
+                                  showToast('success', 'Campaign updated successfully');
+                                } else {
+                                  showToast('success', 'Campaign created successfully');
+                                }
+                                
+                                // Reload all campaigns data
+                                setCampaignsPage(1);
+                                fetchCampaigns(1, false).then((reloadedCampaigns) => {
+                                  // After reload, find the campaign with updated data including correct contact count
+                                  setTimeout(() => {
+                                    const campaignId = savedCampaign.id;
+                                    setActiveCampaign(campaignId);
+                                    
+                                    // Find the campaign in the reloaded data to ensure we have the correct members count
+                                    const updatedCampaign = reloadedCampaigns.find((c: {id: string}) => c.id === campaignId) || savedCampaign;
+                                    
+                                    // Pass the campaign to parent component to populate the chat panel
+                                    if (onCampaignSelect) {
+                                      onCampaignSelect(updatedCampaign);
+                                    }
+                                  }, 100); // Small delay to ensure campaigns are loaded
+                                });
+                              } catch (error) {
+                                // Error is already handled in saveCampaign function
+                                console.error('Failed to save campaign:', error);
+                              }
+                            };
+                            
+                            handleSaveCampaign();
+                          }
+                        }}
+                        onBlur={() => {
+                          if (!campaignGroupName.trim()) {
+                            setCampaignNameError(true);
+                          }
+                        }}
                       />
                     </div>
+                    
+                    {/* Campaign description input */}
+                    {/* <div className="mb-4">
+                      <label className="block text-gray-600 text-sm dark:text-gray-400 mb-1">
+                        Description (optional)
+                      </label>
+                      <textarea
+                        className="w-full rounded-md bg-gray-100 text-gray-800 placeholder-gray-500 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#00a884] 
+                          border border-transparent focus:border-[#00a884] dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
+                        placeholder="Enter campaign description"
+                        rows={2}
+                        value={campaignDescription}
+                        onChange={e => setCampaignDescription(e.target.value)}
+                      />
+                    </div> */}
                   </div>
                   {/* Footer Buttons */}
                   <div className="flex justify-end gap-2 bg-white px-6 py-4 border-t border-gray-200 dark:bg-gray-800 dark:border-gray-700">
                     <button
                       className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
-                      onClick={() => { setShowCreateCampaignModal(false); setCampaignStep(1); setSelectedCampaignContacts([]); setCampaignGroupName(''); }}
+                      onClick={() => { 
+                        setShowCreateCampaignModal(false); 
+                        setCampaignStep(1); 
+                        setSelectedCampaignContacts([]); 
+                        setCampaignGroupName('');
+                        setCampaignIconUrl(null);
+                        setEditCampaignId(null);
+                        setCampaignActiveTab('contacts');
+                        setCampaignPopupSearchQuery('');
+                        setCampaignNameError(false);
+                      }}
                     >
                       Cancel
                     </button>
                     <button
-                      className="px-4 py-2 bg-[#00a884] text-white rounded hover:bg-[#008f6f]"
-                      onClick={() => {
-                        const newCampaign = { 
-                          id: Date.now().toString(), // Generate a unique ID
-                          name: campaignGroupName || 'Untitled Campaign', 
-                          contacts: selectedCampaignContacts 
+                      className={`px-4 py-2 bg-[#00a884] text-white rounded hover:bg-[#008f6f] flex items-center ${savingCampaign ? 'opacity-75 cursor-not-allowed' : ''}`}
+                      onClick={async () => {
+                        // Validate campaign name
+                        if (!campaignGroupName.trim()) {
+                          setCampaignNameError(true);
+                          return;
+                        }
+                        
+                        // Prepare campaign data
+                        const campaignData = {
+                          id: editCampaignId || undefined,
+                          name: campaignGroupName.trim(),
+                          description: campaignDescription.trim(),
+                          contacts: selectedCampaignContacts,
+                          iconUrl: campaignIconUrl || undefined
                         };
-                        console.log("Creating new campaign:", newCampaign);
-                        setCampaigns([...campaigns, newCampaign]);
-                        setShowCreateCampaignModal(false);
-                        setCampaignStep(1);
-                        setSelectedCampaignContacts([]);
-                        setCampaignGroupName('');
                         
-                        // Automatically select the newly created campaign
-                        setActiveCampaign(newCampaign.id);
-                        
-                        // Pass the campaign to parent component
-                        if (onCampaignSelect) {
-                          console.log("Passing new campaign to Main component:", newCampaign);
-                          onCampaignSelect(newCampaign);
+                        try {
+                          // Save to API
+                          const savedCampaign = await saveCampaign(campaignData);
+                          
+                          // Reset and close modal first for better UX
+                          setShowCreateCampaignModal(false);
+                          setCampaignStep(1);
+                          setSelectedCampaignContacts([]);
+                          setCampaignGroupName('');
+                          setCampaignIconUrl(null);
+                          setEditCampaignId(null);
+                          setCampaignActiveTab('contacts');
+                          setCampaignNameError(false);
+                          
+                          if (editCampaignId) {
+                            showToast('success', 'Campaign updated successfully');
+                          } else {
+                            showToast('success', 'Campaign created successfully');
+                          }
+                          
+                          // Reload all campaigns data
+                          setCampaignsPage(1);
+                          fetchCampaigns(1, false).then((reloadedCampaigns) => {
+                            // After reload, find the campaign with updated data including correct contact count
+                            setTimeout(() => {
+                              const campaignId = savedCampaign.id;
+                              setActiveCampaign(campaignId);
+                              
+                              // Find the campaign in the reloaded data to ensure we have the correct members count
+                              const updatedCampaign = reloadedCampaigns.find((c: {id: string}) => c.id === campaignId) || savedCampaign;
+                              
+                              // Pass the campaign to parent component to populate the chat panel
+                              if (onCampaignSelect) {
+                                onCampaignSelect(updatedCampaign);
+                              }
+                            }, 100); // Small delay to ensure campaigns are loaded
+                          });
+                        } catch (error) {
+                          // Error is already handled in saveCampaign function
+                          console.error('Failed to save campaign:', error);
                         }
                       }}
-                      disabled={selectedCampaignContacts.length === 0}
+                      disabled={selectedCampaignContacts.length === 0 || savingCampaign}
                     >
-                      Create
+                      {savingCampaign ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                          {editCampaignId ? 'Updating...' : 'Creating...'}
+                        </>
+                      ) : (
+                        editCampaignId ? 'Update' : 'Create'
+                      )}
                     </button>
                   </div>
                 </>
