@@ -227,7 +227,7 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
                       }
                       
                       // Call the logout endpoint
-                      const response = await fetch('https://api-ibico.cloudious.net/api/WhatsApp/LogoutInstance', {
+                      const response = await fetch('https://v3-wabi.cloudious.net/api/WhatsApp/LogoutInstance', {
                         method: 'POST',
                         headers: {
                           'Content-Type': 'application/json',

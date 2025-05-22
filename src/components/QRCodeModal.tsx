@@ -60,7 +60,7 @@ const QRCodeModal: React.FC<QRCodeModalProps> = ({ onClose, onConnect }) => {
       }
       
       console.log("Checking WhatsApp connection status...");
-      const response = await fetch('https://api-ibico.cloudious.net/api/WhatsApp/InstanceStatus', {
+      const response = await fetch('https://v3-wabi.cloudious.net/api/WhatsApp/InstanceStatus', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -139,7 +139,7 @@ const QRCodeModal: React.FC<QRCodeModalProps> = ({ onClose, onConnect }) => {
       }
       
       console.log("Fetching QR code...");
-      const response = await fetch('https://api-ibico.cloudious.net/api/WhatsApp/ConnectInstance', {
+      const response = await fetch('https://v3-wabi.cloudious.net/api/WhatsApp/ConnectInstance', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

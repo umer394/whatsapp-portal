@@ -90,7 +90,7 @@ const CampaignChatPanel: React.FC<CampaignChatPanelProps> = ({ campaign, onEscPr
       }
       
       // Call API to get campaign messages
-      const response = await fetch(`https://api-ibico.cloudious.net/api/Chat/LoadCampaignMessages/${campaignId}`, {
+      const response = await fetch(`https://v3-wabi.cloudious.net/api/Chat/LoadCampaignMessages/${campaignId}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -278,7 +278,7 @@ const CampaignChatPanel: React.FC<CampaignChatPanelProps> = ({ campaign, onEscPr
       };
       
       // Call API to start campaign message
-      const response = await fetch('https://api-ibico.cloudious.net/api/Chat/StartCampaign', {
+      const response = await fetch('https://v3-wabi.cloudious.net/api/Chat/StartCampaign', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

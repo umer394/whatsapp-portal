@@ -283,7 +283,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       }
 
       const response = await fetch(
-        `https://api-ibico.cloudious.net/api/Contacts/GetByPagination/?pageNumber=${contactsPage}&pageSize=50&searchTerm=${searchQuery}`,
+        `https://v3-wabi.cloudious.net/api/Contacts/GetByPagination/?pageNumber=${contactsPage}&pageSize=50&searchTerm=${searchQuery}`,
         {
           headers: {
             'Authorization': `Bearer ${token}`
@@ -378,7 +378,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       
       // Call WhatsApp API to get profile picture
       const response = await fetch(
-        `https://api-ibico.cloudious.net/api/WhatsApp/GetProfilePicture?phoneNumber=${encodeURIComponent(formattedPhone)}`,
+        `https://v3-wabi.cloudious.net/api/WhatsApp/GetProfilePicture?phoneNumber=${encodeURIComponent(formattedPhone)}`,
         {
           headers: {
             'Authorization': `Bearer ${token}`
@@ -448,7 +448,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       formData.append('file', file);
 
       // Upload file
-      fetch('https://api-ibico.cloudious.net/api/Contacts/BulkUpload', {
+      fetch('https://v3-wabi.cloudious.net/api/Contacts/BulkUpload', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -500,7 +500,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         }
 
         const response = await fetch(
-          `https://api-ibico.cloudious.net/api/Contacts/GetByPagination/?pageNumber=1&pageSize=1&searchTerm=`,
+          `https://v3-wabi.cloudious.net/api/Contacts/GetByPagination/?pageNumber=1&pageSize=1&searchTerm=`,
           {
             headers: {
               'Authorization': `Bearer ${token}`
@@ -566,7 +566,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       const queryTerm = searchTerm !== undefined ? searchTerm : campaignPopupSearchQuery;
 
       const response = await fetch(
-        `https://api-ibico.cloudious.net/api/Contacts/GetByPagination/?pageNumber=${page}&pageSize=50&searchTerm=${queryTerm}`,
+        `https://v3-wabi.cloudious.net/api/Contacts/GetByPagination/?pageNumber=${page}&pageSize=50&searchTerm=${queryTerm}`,
         {
           headers: {
             'Authorization': `Bearer ${token}`
@@ -720,7 +720,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       }
       
       // Send delete request to API
-      const response = await fetch(`https://api-ibico.cloudious.net/api/Campaigns/Delete/${campaignId}`, {
+      const response = await fetch(`https://v3-wabi.cloudious.net/api/Campaigns/Delete/${campaignId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -1507,7 +1507,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       };
 
       // Send request to API
-      const response = await fetch('https://api-ibico.cloudious.net/api/Campaigns/Save', {
+      const response = await fetch('https://v3-wabi.cloudious.net/api/Campaigns/Save', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -1563,7 +1563,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       
       // Use GetByPagination endpoint
       const response = await fetch(
-        `https://api-ibico.cloudious.net/api/Campaigns/GetByPagination/?pageNumber=${page}&pageSize=${campaignsPageSize}&searchTerm=${campaignSearchQuery}`,
+        `https://v3-wabi.cloudious.net/api/Campaigns/GetByPagination/?pageNumber=${page}&pageSize=${campaignsPageSize}&searchTerm=${campaignSearchQuery}`,
         {
           headers: {
             'Authorization': `Bearer ${token}`
@@ -1659,7 +1659,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       
       // Fetch campaign details from the LoadSelectedData endpoint
       const response = await fetch(
-        `https://api-ibico.cloudious.net/api/Campaigns/LoadSelectedData?id=${campaignId}`,
+        `https://v3-wabi.cloudious.net/api/Campaigns/LoadSelectedData?id=${campaignId}`,
         {
           headers: {
             'Authorization': `Bearer ${token}`
@@ -2674,7 +2674,7 @@ const SettingsContent: React.FC = () => {
       }
       
       // Call the logout endpoint
-      const response = await fetch('https://api-ibico.cloudious.net/api/WhatsApp/LogoutInstance', {
+      const response = await fetch('https://v3-wabi.cloudious.net/api/WhatsApp/LogoutInstance', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
