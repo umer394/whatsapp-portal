@@ -342,11 +342,11 @@ const Login: React.FC = () => {
       
       {/* Right section with login form */}
       <div className="flex flex-1 flex-col items-center justify-center p-6 md:w-1/2">
-        <div className="w-full max-w-md">
+        <div className="w-full max-w-md mobile-center">
           {/* Logo and title */}
           <div className="mb-8 text-center">
             <div className="flex items-center justify-center gap-3 mb-2">
-              <svg width="64" height="64" viewBox="0 0 122.88 122.31">
+              <svg width="80" height="80" viewBox="0 0 122.88 122.31" className="mobile-touch-target">
                 <defs>
                   <linearGradient id="whatsapp-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
                     <stop offset="0%" stopColor="#25D366" />
@@ -356,23 +356,8 @@ const Login: React.FC = () => {
                 <path fill="url(#whatsapp-gradient)" d="M27.75,0H95.13a27.83,27.83,0,0,1,27.75,27.75V94.57a27.83,27.83,0,0,1-27.75,27.74H27.75A27.83,27.83,0,0,1,0,94.57V27.75A27.83,27.83,0,0,1,27.75,0Z"/>
                 <path fill="#fff" d="M61.44,25.39A35.76,35.76,0,0,0,31.18,80.18L27.74,94.86l14.67-3.44a35.77,35.77,0,1,0,19-66ZM41,95.47,35.1,96.85l.94,4,4.35-1a43.36,43.36,0,0,0,10.46,4l1-4A40,40,0,0,1,41,95.45l0,0ZM21.76,86.53l4,.93,1.37-5.91a39.6,39.6,0,0,1-4.43-10.82l-4,1a44.23,44.23,0,0,0,4.06,10.46l-1,4.35Zm9.68,11.15-8.52,2,2-8.52-4-.93-2,8.51a4.12,4.12,0,0,0,3.08,5,4,4,0,0,0,1.88,0l8.52-2-.94-4.06Zm24-76a40.56,40.56,0,0,1,12,0L68,17.63a44.25,44.25,0,0,0-13.2,0l.63,4.07ZM99.14,38.4l-3.53,2.12a39.89,39.89,0,0,1,4.57,11l4-1a43.75,43.75,0,0,0-5-12.18Zm-69.81-.91A40.29,40.29,0,0,1,37.78,29l-2.47-3.32A43.62,43.62,0,0,0,26,35l3.32,2.47ZM85.1,29a40.11,40.11,0,0,1,8.46,8.45L96.88,35a43.62,43.62,0,0,0-9.3-9.3L85.1,29Zm8.46,55.78a40.11,40.11,0,0,1-8.46,8.45l2.45,3.32a44,44,0,0,0,9.33-9.3l-3.32-2.47ZM67.42,100.6a39.89,39.89,0,0,1-12,0l-.62,4.09a44.18,44.18,0,0,0,13.19,0l-.62-4.09Zm36.76-28.88-4-1A40,40,0,0,1,95.6,81.8l3.53,2.12a43.72,43.72,0,0,0,5.05-12.2Zm-2.84-10.57a39.93,39.93,0,0,1-.45,6l4.07.62a44.18,44.18,0,0,0,0-13.19l-4.07.62a39.8,39.8,0,0,1,.45,6ZM84.2,98.85l-2.12-3.53a39.89,39.89,0,0,1-11,4.57l1,4a43.75,43.75,0,0,0,12.18-5ZM21.55,61.15a41.15,41.15,0,0,1,.44-6l-4.07-.62a44.18,44.18,0,0,0,0,13.19L22,67.13a41.28,41.28,0,0,1-.44-6Zm2.2-22.75A43.83,43.83,0,0,0,18.7,50.59l4,1a40.08,40.08,0,0,1,4.57-11.06L23.75,38.4ZM72,18.41l-1,4A40.08,40.08,0,0,1,82.08,27l2.13-3.53A44,44,0,0,0,72,18.41Zm-21.13,0,1,4A40.08,40.08,0,0,0,40.8,27l-2.12-3.53a44,44,0,0,1,12.2-5.05Z"/>
               </svg>
-              
             </div>
-            <span className="text-2xl font-bold" style={{ fontFamily: "'Mabry Pro', sans-serif" }}>WABI</span>
-            {/* <h4 className="text-gray-800 flex items-center justify-center gap-2" style={{ fontFamily: "'Mabry Pro', sans-serif" }}>
-              {showOtpScreen && (
-                <button 
-                  onClick={handleGoBack}
-                  className="text-gray-600 hover:text-gray-900"
-                  aria-label="Go back to phone number"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                  </svg>
-                </button>
-              )}
-              {showOtpScreen ? 'Enter verification code' : 'Enter your WhatsApp number'}
-            </h4> */}
+            <span className="text-3xl font-bold mobile-text-xl" style={{ fontFamily: "'Mabry Pro', sans-serif" }}>WABI</span>
             
             {/* Horizontal separator line */}
             {showOtpScreen && (
@@ -380,12 +365,10 @@ const Login: React.FC = () => {
             )}
           </div>
           
-          
-          
-          <form onSubmit={showOtpScreen ? handleVerifyOTP : handleRequestOTP}>
+          <form onSubmit={showOtpScreen ? handleVerifyOTP : handleRequestOTP} className="mobile-center">
             {/* API Error message */}
             {apiError && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 rounded-md">
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 rounded-md text-center">
                 {apiError}
               </div>
             )}
@@ -395,11 +378,11 @@ const Login: React.FC = () => {
               <div className="mb-6">
                 <div className="relative">
                   {/* Country code dropdown and phone input in single row */}
-                  <div className="flex">
+                  <div className="flex mobile-stack">
                     {/* Country code selector */}
-                    <div className="relative">
+                    <div className="relative mb-0 md:mb-0 mobile-center">
                       <div 
-                        className="flex items-center h-full px-3 border border-r-0 border-gray-300 rounded-l-md bg-white cursor-pointer"
+                        className="flex items-center justify-center h-12 px-3 border border-r-0 md:border-r-0 border-gray-300 rounded-md md:rounded-l-md md:rounded-r-none bg-white cursor-pointer mobile-full-width mobile-touch-target"
                         onClick={() => setDropdownOpen(!dropdownOpen)}
                       >
                         <span className="text-xl mr-2">
@@ -454,7 +437,7 @@ const Login: React.FC = () => {
                     <input
                       ref={phoneInputRef}
                       type="tel"
-                      className="flex-1 p-3 border border-gray-300 rounded-r-md focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
+                      className="flex-1 p-3 h-12 border border-gray-300 rounded-md md:rounded-l-none md:rounded-r-md focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500 mobile-full-width mobile-touch-target mt-3 md:mt-0"
                       placeholder="Enter your WhatsApp number"
                       value={phoneNumber}
                       onChange={handlePhoneNumberChange}
@@ -465,20 +448,20 @@ const Login: React.FC = () => {
                   
                   {/* Error message - only show if touched */}
                   {touched && errorMessage && (
-                    <p className="mt-1 text-sm text-red-600">{errorMessage}</p>
+                    <p className="mt-1 text-sm text-red-600 text-center">{errorMessage}</p>
                   )}
                 </div>
               </div>
             ) : (
               // OTP input screen
               <div className="mb-6">
-                <div className="flex justify-center gap-1 mb-4">
+                <div className="flex justify-center gap-2 mb-4">
                   {otpValues.map((value, index) => (
                     <input
                       key={index}
                       ref={(el) => { otpInputRefs.current[index] = el; }}
                       type="text"
-                      className={`w-14 h-14 text-center text-xl font-bold border ${
+                      className={`w-14 h-14 text-center text-xl font-bold border mobile-touch-target ${
                         value ? 'border-gray-300' : index === otpValues.findIndex(v => !v) ? 'border-green-500 border-2' : 'border-gray-300'
                       } rounded-md focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500`}
                       value={value}
@@ -495,7 +478,7 @@ const Login: React.FC = () => {
             {/* Submit button */}
             <button
               type="submit"
-              className={`w-full p-3 rounded-md text-white font-medium flex items-center justify-center ${(!isValid && !showOtpScreen) || isLoading ? 'opacity-70 cursor-not-allowed' : 'hover:opacity-90'}`}
+              className={`w-full h-12 p-3 rounded-md text-white font-medium flex items-center justify-center mobile-touch-target ${(!isValid && !showOtpScreen) || isLoading ? 'opacity-70 cursor-not-allowed' : 'hover:opacity-90'}`}
               style={{ background: gradients.primary.background }}
               disabled={((!isValid && !showOtpScreen) || isLoading)}
             >

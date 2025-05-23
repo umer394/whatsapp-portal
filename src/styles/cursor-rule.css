@@ -1,0 +1,129 @@
+/* 
+ * Cursor Rule CSS - Mobile-only styles
+ * This file contains styles that only apply to mobile screens (below 768px)
+ * and won't affect desktop layouts
+ */
+
+/* Base mobile-only styles */
+@media (max-width: 767px) {
+  /* Add your mobile-specific styles here */
+  .mobile-only {
+    display: block;
+  }
+  
+  .desktop-only {
+    display: none;
+  }
+  
+  /* Center align elements on mobile */
+  .mobile-center {
+    text-align: center;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  
+  /* Full width on mobile */
+  .mobile-full-width {
+    width: 100%;
+  }
+  
+  /* Adjust padding/margins for mobile */
+  .mobile-padding {
+    padding: 0.5rem !important;
+  }
+  
+  /* Stack elements vertically on mobile */
+  .mobile-stack {
+    display: flex;
+    flex-direction: column;
+  }
+  
+  /* Adjust font sizes for mobile */
+  .mobile-text-lg {
+    font-size: 1.125rem;
+  }
+  
+  .mobile-text-xl {
+    font-size: 1.25rem;
+  }
+  
+  /* Improve touch targets on mobile */
+  .mobile-touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* WhatsApp-like mobile layout adjustments */
+  body {
+    overscroll-behavior: none;
+  }
+  
+  /* Add padding to main content to accommodate fixed header and footer */
+  .main-content {
+    padding-top: 100px;
+    padding-bottom: 70px;
+  }
+  
+  /* Mobile chat list styles */
+  .chat-list-item {
+    padding: 12px;
+    border-bottom: 1px solid #E9EDEF;
+  }
+  
+  /* Mobile search bar styles */
+  .mobile-search-bar {
+    padding: 8px 12px;
+    background-color: #F0F2F5;
+    border-radius: 24px;
+  }
+  
+  /* Mobile header shadow */
+  .mobile-header-shadow {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  }
+  
+  /* Safe area padding for notched phones */
+  .safe-area-padding-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+  
+  .safe-area-padding-top {
+    padding-top: env(safe-area-inset-top, 0);
+  }
+}
+
+/* Ensure desktop styles are preserved */
+@media (min-width: 768px) {
+  .mobile-only {
+    display: none;
+  }
+  
+  .desktop-only {
+    display: block;
+  }
+  
+  /* Reset any mobile-specific overrides */
+  .mobile-stack {
+    flex-direction: initial;
+  }
+}
+
+/* 
+ * Usage examples:
+ * 
+ * 1. To show/hide elements based on screen size:
+ *    <div className="mobile-only">Only visible on mobile</div>
+ *    <div className="desktop-only">Only visible on desktop</div>
+ *
+ * 2. To center elements only on mobile:
+ *    <div className="mobile-center">Centered on mobile, normal on desktop</div>
+ *
+ * 3. To make elements full width only on mobile:
+ *    <div className="mobile-full-width">Full width on mobile, normal on desktop</div>
+ *
+ * 4. To stack elements vertically only on mobile:
+ *    <div className="flex mobile-stack">
+ *      <div>Item 1</div>
+ *      <div>Item 2</div>
+ *    </div>
+ */ 
