@@ -5,6 +5,7 @@ import { useTheme } from '../context/ThemeContext';
 import Sidebar from '../components/Sidebar';
 import ChatPanel from '../components/ChatPanel';
 import CampaignChatPanel from '../components/CampaignChatPanel';
+import InvoicesPanel from '../components/InvoicesPanel';
 import QRCodeModal from '../components/QRCodeModal';
 import { FaWhatsapp, FaQrcode } from 'react-icons/fa';
 import { Contact } from '../types';
@@ -166,6 +167,15 @@ const Main: React.FC = () => {
           campaign={activeCampaign} 
           onEscPress={() => setShowQrConnect(true)}
           onContactDisplay={handleContactDisplay}
+        />
+      );
+    }
+    
+    // Check if we should show invoices panel
+    if (activeTab === 'invoices') {
+      return (
+        <InvoicesPanel 
+          onEscPress={() => setShowQrConnect(true)}
         />
       );
     }

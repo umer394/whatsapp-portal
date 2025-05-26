@@ -6,7 +6,8 @@ import {
   FaBullhorn, 
   FaChartBar, 
   FaSignOutAlt,
-  FaCog
+  FaCog,
+  FaFileInvoiceDollar
 } from 'react-icons/fa';
 
 interface VerticalMenuProps {
@@ -34,7 +35,8 @@ const VerticalMenu: React.FC<VerticalMenuProps> = ({
     { id: 'campaigns', icon: <FaBullhorn size={20} />, label: 'Campaigns' },
     // { id: 'chat', icon: <FaComment size={20} />, label: 'Chat' },
     { id: 'analytics', icon: <FaChartBar size={20} />, label: 'Analytics' },
-     { id: 'settings', icon: <FaCog size={20} />, label: 'Settings' },
+    { id: 'invoices', icon: <FaFileInvoiceDollar size={20} />, label: 'Send Invoices' },
+    { id: 'settings', icon: <FaCog size={20} />, label: 'Settings' },
   ];
 
   const bottomItems = [
