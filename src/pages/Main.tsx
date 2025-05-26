@@ -7,8 +7,13 @@ import ChatPanel from '../components/ChatPanel';
 import CampaignChatPanel from '../components/CampaignChatPanel';
 import InvoicesPanel from '../components/InvoicesPanel';
 import QRCodeModal from '../components/QRCodeModal';
+import MobileHeader from '../components/MobileHeader';
+import MobileNavBar from '../components/MobileNavBar';
+import FloatingActionButton from '../components/FloatingActionButton';
 import { FaWhatsapp, FaQrcode } from 'react-icons/fa';
 import { Contact } from '../types';
+import Settings from '../components/Settings';
+import SidebarSettingsContent from '../components/SidebarSettingsContent';
 
 // WhatsApp gradient for reuse
 const whatsappGradient = 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)';
@@ -22,6 +27,8 @@ const Main: React.FC = () => {
   const [activeCampaign, setActiveCampaign] = useState<{ id: string; name: string; contacts: Contact[] } | null>(null);
   const [activeTab, setActiveTab] = useState<string>('contacts');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [showMobileSearch, setShowMobileSearch] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
 
   // Check WhatsApp connection status when component mounts, but only once
   useEffect(() => {
@@ -95,20 +102,52 @@ const Main: React.FC = () => {
     showToast(`Contact: ${name}`);
   };
 
+  // Mobile handlers
+  const handleMobileSearchClick = () => {
+    setShowMobileSearch(!showMobileSearch);
+  };
+
+  const handleMobileMenuClick = () => {
+    setShowMobileMenu(!showMobileMenu);
+  };
+
+  const handleNewChat = () => {
+    // Implement new chat functionality
+    console.log("New chat");
+  };
+
+  const handleNewCampaign = () => {
+    // Implement new campaign functionality
+    console.log("New campaign");
+  };
+
+  const handleNewContact = () => {
+    // Implement new contact functionality
+    console.log("New contact");
+  };
+
   // Right chat panel rendering logic
   const renderChatPanel = () => {
     console.log("Rendering chat panel, activeTab:", activeTab, "activeCampaign:", activeCampaign);
     
-    // Don't render any chat if settings tab is active
+    // Handle settings tab - show Settings component on mobile, placeholder on desktop
     if (activeTab === 'settings') {
       return (
-        <div className="flex h-full flex-col items-center justify-center bg-[#f0f2f5] dark:bg-gray-800">
-          <div className="mx-auto max-w-md text-center">
-            <h1 className="text-xl font-medium text-gray-600 dark:text-gray-300">
-              Select a chat to start messaging
-            </h1>
+        <>
+          {/* Mobile: Show SidebarSettingsContent */}
+          <div className="md:hidden flex h-full flex-col bg-white dark:bg-gray-900 overflow-hidden">
+            <SidebarSettingsContent />
           </div>
-        </div>
+          
+          {/* Desktop: Show placeholder */}
+          <div className="hidden md:flex h-full flex-col items-center justify-center bg-[#f0f2f5] dark:bg-gray-800">
+            <div className="mx-auto max-w-md text-center">
+              <h1 className="text-xl font-medium text-gray-600 dark:text-gray-300">
+                Select a chat to start messaging
+              </h1>
+            </div>
+          </div>
+        </>
       );
     }
     
@@ -186,14 +225,21 @@ const Main: React.FC = () => {
 
   return (
     <div className={`h-screen w-screen overflow-hidden ${darkMode ? 'dark' : ''}`}>
-      {/* Header strip - reduced to 25% of screen height */}
-      <div className="h-[25vh] w-full bg-[#00a884]"></div>
+      {/* Mobile Header */}
+      <MobileHeader 
+        activeTab={activeTab} 
+        onSearchClick={handleMobileSearchClick} 
+        onMenuClick={handleMobileMenuClick} 
+      />
+      
+      {/* Header strip - reduced to 25% of screen height - only on desktop */}
+      <div className="h-[25vh] w-full bg-[#00a884] desktop-only"></div>
       
       {/* Main app container */}
-      <div className="absolute inset-0 mx-auto flex h-screen max-w-[1600px] flex-col px-[18px] pb-[18px] pt-[19px]">
-        <div className="flex h-full rounded-sm shadow-md">
-          {/* Left sidebar - around 30% width */}
-          <div className="w-[420px] min-w-[320px] border-r border-[#e9edef] dark:border-gray-700">
+      <div className="absolute inset-0 mx-auto flex h-screen max-w-[1600px] flex-col px-[18px] pb-[18px] pt-[19px] md:pt-[19px] mobile-padding">
+        <div className="flex h-full rounded-sm shadow-md mt-16 mb-16 md:mt-0 md:mb-0">
+          {/* Left sidebar - hidden on mobile, shown on desktop */}
+          <div className="w-[420px] min-w-[320px] border-r border-[#e9edef] dark:border-gray-700 desktop-only">
             <Sidebar 
               onOpenSettings={() => setActiveTab('settings')} 
               onChatSelect={handleChatSelect} 
@@ -204,11 +250,21 @@ const Main: React.FC = () => {
             />
           </div>
           
-          {/* Right chat panel */}
+          {/* Right chat panel - full width on mobile */}
           <div className="flex-1">
             {renderChatPanel()}
           </div>
         </div>
+        
+        {/* Mobile Navigation Bar */}
+        <MobileNavBar activeTab={activeTab} onTabChange={handleTabChange} />
+        
+        {/* Floating Action Button */}
+        <FloatingActionButton 
+          onNewChat={handleNewChat}
+          onNewCampaign={handleNewCampaign}
+          onNewContact={handleNewContact}
+        />
         
         {/* QR Code Modal */}
         {showQrModal && <QRCodeModal onClose={handleCloseQrModal} onConnect={handleWhatsAppConnected} />}
