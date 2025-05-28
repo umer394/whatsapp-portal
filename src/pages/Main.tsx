@@ -25,7 +25,7 @@ const Main: React.FC = () => {
   const [showQrModal, setShowQrModal] = useState(false);
   const hasCheckedStatus = useRef(false);
   const [activeCampaign, setActiveCampaign] = useState<{ id: string; name: string; contacts: Contact[] } | null>(null);
-  const [activeTab, setActiveTab] = useState<string>('contacts');
+  const [activeTab, setActiveTab] = useState<string>('campaigns');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [showMobileSearch, setShowMobileSearch] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);

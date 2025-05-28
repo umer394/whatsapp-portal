@@ -42,6 +42,7 @@ const CampaignChatPanel: React.FC<CampaignChatPanelProps> = ({ campaign, onEscPr
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const emojiButtonRef = useRef<HTMLButtonElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [campaignMessages, setCampaignMessages] = useState<{
     id: string;
     text: string;
@@ -136,6 +137,20 @@ const CampaignChatPanel: React.FC<CampaignChatPanelProps> = ({ campaign, onEscPr
   useEffect(() => {
     scrollToBottom();
   }, [campaignMessages]);
+  
+  // Auto-resize textarea based on content
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      // Reset height to auto to get the correct scrollHeight
+      textarea.style.height = 'auto';
+      // Calculate single line height (24px line-height + 16px padding)
+      const singleLineHeight = 40;
+      // Set height based on scrollHeight, with min (single line) and max limits
+      const newHeight = Math.min(Math.max(textarea.scrollHeight, singleLineHeight), 120); // Min 40px (1 line), Max 120px
+      textarea.style.height = `${newHeight}px`;
+    }
+  }, [message]);
   
   useEffect(() => {
     // Handle Escape key press
@@ -441,70 +456,72 @@ const CampaignChatPanel: React.FC<CampaignChatPanelProps> = ({ campaign, onEscPr
               </div>
             ) : (
               <div className="space-y-3">
-                {campaignMessages.map(msg => (
-                  <div
-                    key={msg.id}
-                    className={`flex ${msg.senderId === (user?.id || 'current-user').toString() ? 'justify-end' : 'justify-start'}`}
-                  >
-                    <div 
-                      className={`rounded-lg px-3 py-2 max-w-[55%] ${
-                        msg.senderId === (user?.id || 'current-user').toString()
-                          ? 'bg-[#d9fdd3] dark:bg-green-800 text-gray-800 dark:text-white'
-                          : 'bg-white dark:bg-gray-700 text-gray-800 dark:text-white'
-                      }`}
-                    >
-                      {/* <div className="mb-1 text-sm font-semibold text-[#00a884] dark:text-green-400">
-                        {msg.senderName}
-                      </div> */}
-                      
-                      {/* Media preview */}
-                      {msg.media && (
-                        <div className="mb-2 rounded-lg overflow-hidden">
-                          <img 
-                            src={msg.media} 
-                            alt="Media" 
-                            className="max-w-full rounded-lg shadow-sm object-contain max-h-60 cursor-pointer"
-                            onClick={() => openLightbox(msg.media!)}
-                            onError={(e) => {
-                              // Handle image load error
-                              e.currentTarget.style.display = 'none';
-                              e.currentTarget.parentElement!.innerHTML = `
-                                <div class="bg-gray-200 dark:bg-gray-600 p-3 rounded-lg text-center text-gray-500 dark:text-gray-400">
-                                  Media unavailable
-                                </div>
-                              `;
-                            }}
-                          />
+                {campaignMessages.map(msg => {
+                  const isCurrentUser = msg.senderId === (user?.id || 'current-user').toString();
+                  const hasMedia = msg.media;
+                  const hasText = msg.text && msg.text.trim();
+                  
+                  return (
+                    <div key={msg.id} className="space-y-2">
+                      {/* Media card - show first if present */}
+                      {hasMedia && (
+                        <div className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}>
+                          <div 
+                            className={`rounded-lg overflow-hidden max-w-[55%] ${
+                              isCurrentUser
+                                ? 'bg-[#d9fdd3] dark:bg-green-800'
+                                : 'bg-white dark:bg-gray-700'
+                            }`}
+                          >
+                            <img 
+                              src={msg.media || ''} 
+                              alt="Media" 
+                              className="max-w-full object-contain max-h-60 cursor-pointer"
+                              onClick={() => msg.media && openLightbox(msg.media)}
+                              onError={(e) => {
+                                // Handle image load error
+                                e.currentTarget.style.display = 'none';
+                                e.currentTarget.parentElement!.innerHTML = `
+                                  <div class="bg-gray-200 dark:bg-gray-600 p-3 rounded-lg text-center text-gray-500 dark:text-gray-400">
+                                    Media unavailable
+                                  </div>
+                                `;
+                              }}
+                            />
+                          </div>
                         </div>
                       )}
                       
-                      <p className="whitespace-pre-wrap break-words">{msg.text}</p>
-                      
-                      {/* Message stats */}
-                      {/* {msg.stats && (
-                        <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 flex flex-wrap gap-1">
-                          <span className="bg-green-100 dark:bg-green-900 px-1.5 py-0.5 rounded text-green-800 dark:text-green-200">
-                            Sent: {msg.stats.sentCount}/{msg.stats.totalMembers}
-                          </span>
-                          {msg.stats.pendingCount > 0 && (
-                            <span className="bg-yellow-100 dark:bg-yellow-900 px-1.5 py-0.5 rounded text-yellow-800 dark:text-yellow-200">
-                              Pending: {msg.stats.pendingCount}
-                            </span>
-                          )}
-                          {msg.stats.errorCount > 0 && (
-                            <span className="bg-red-100 dark:bg-red-900 px-1.5 py-0.5 rounded text-red-800 dark:text-red-200">
-                              Failed: {msg.stats.errorCount}
-                            </span>
-                          )}
+                      {/* Text card - show if present */}
+                      {hasText && (
+                        <div className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}>
+                          <div 
+                            className={`rounded-lg px-3 py-2 max-w-[55%] ${
+                              isCurrentUser
+                                ? 'bg-[#d9fdd3] dark:bg-green-800 text-gray-800 dark:text-white'
+                                : 'bg-white dark:bg-gray-700 text-gray-800 dark:text-white'
+                            }`}
+                          >
+                            <p className="whitespace-pre-wrap break-words">{msg.text}</p>
+                            
+                            <div className="mt-1 text-right text-xs text-gray-500 dark:text-gray-400">
+                              {formatTime(new Date(msg.timestamp))}
+                            </div>
+                          </div>
                         </div>
-                      )} */}
+                      )}
                       
-                      <div className="mt-1 text-right text-xs text-gray-500 dark:text-gray-400">
-                        {formatTime(new Date(msg.timestamp))}
-                      </div>
+                      {/* If only media and no text, show timestamp on media card */}
+                      {hasMedia && !hasText && (
+                        <div className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}>
+                          <div className="text-right text-xs text-gray-500 dark:text-gray-400 max-w-[55%]">
+                            {formatTime(new Date(msg.timestamp))}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
                 <div ref={messagesEndRef} />
               </div>
             )}
@@ -514,15 +531,15 @@ const CampaignChatPanel: React.FC<CampaignChatPanelProps> = ({ campaign, onEscPr
           <div className="bg-white p-3 dark:bg-gray-900">
             {/* Image preview */}
             {imagePreview && (
-              <div className="mb-2 relative">
+              <div className="mb-2 relative bg-[#f0f2f5] dark:bg-gray-800 rounded-lg p-2">
                 <div className="relative inline-block">
                   <img 
                     src={imagePreview} 
                     alt="Preview" 
-                    className="max-h-32 rounded-lg border border-gray-200 dark:border-gray-700"
+                    className="max-h-32 rounded-lg border border-gray-300 dark:border-gray-600 shadow-sm"
                   />
                   <button 
-                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors shadow-md"
                     onClick={clearUploadedMedia}
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -536,7 +553,7 @@ const CampaignChatPanel: React.FC<CampaignChatPanelProps> = ({ campaign, onEscPr
               {/* Emoji button */}
               <button 
                 ref={emojiButtonRef}
-                className="mr-2 text-[#54656f] dark:text-gray-400"
+                className="mr-2 text-[#54656f] dark:text-gray-400 flex-shrink-0"
                 onClick={() => setShowEmojiPicker(!showEmojiPicker)}
               >
                 <FaSmile className="h-5 w-5" />
@@ -544,7 +561,7 @@ const CampaignChatPanel: React.FC<CampaignChatPanelProps> = ({ campaign, onEscPr
               
               {/* Attachment button */}
               <button 
-                className="mr-2 text-[#54656f] dark:text-gray-400"
+                className="mr-2 text-[#54656f] dark:text-gray-400 flex-shrink-0"
                 onClick={handleAttachmentClick}
               >
                 <FaPaperclip className="h-5 w-5" />
@@ -562,17 +579,24 @@ const CampaignChatPanel: React.FC<CampaignChatPanelProps> = ({ campaign, onEscPr
               {/* Text input */}
               <textarea
                 placeholder="Type a message"
-                className="w-full resize-none bg-transparent py-2 outline-none dark:text-white"
+                className="w-full resize-none bg-transparent outline-none dark:text-white min-h-[40px] max-h-[120px] flex-1"
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 onKeyDown={handleKeyDown}
-                rows={1}
                 disabled={isUploading || isSending}
+                ref={textareaRef}
+                rows={1}
+                style={{ 
+                  height: '40px', 
+                  paddingTop: '8px',
+                  paddingBottom: '8px',
+                  lineHeight: '24px'
+                }}
               />
               
               {/* Send message button */}
               <button 
-                className={`ml-2 ${isSending ? 'text-gray-400' : 'text-[#54656f] dark:text-gray-400 hover:text-green-600 dark:hover:text-green-400'}`} 
+                className={`ml-2 flex-shrink-0 ${isSending ? 'text-gray-400' : 'text-[#54656f] dark:text-gray-400 hover:text-green-600 dark:hover:text-green-400'}`} 
                 onClick={handleSendMessage}
                 disabled={isUploading || isSending}
               >

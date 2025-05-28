@@ -31,8 +31,8 @@ const VerticalMenu: React.FC<VerticalMenuProps> = ({
   };
 
   const menuItems = [
-    { id: 'contacts', icon: <FaAddressBook size={20} />, label: 'Contacts' },
     { id: 'campaigns', icon: <FaBullhorn size={20} />, label: 'Campaigns' },
+    { id: 'contacts', icon: <FaAddressBook size={20} />, label: 'Contacts' },
     // { id: 'chat', icon: <FaComment size={20} />, label: 'Chat' },
     { id: 'analytics', icon: <FaChartBar size={20} />, label: 'Analytics' },
     { id: 'invoices', icon: <FaFileInvoiceDollar size={20} />, label: 'Send Invoices' },

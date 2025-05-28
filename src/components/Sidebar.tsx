@@ -56,7 +56,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [showNewChatModal, setShowNewChatModal] = useState(false);
-  const [activeTab, setActiveTab] = useState(externalActiveTab || 'contacts');
+  const [activeTab, setActiveTab] = useState(externalActiveTab || 'campaigns');
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [contactsLoading, setContactsLoading] = useState(false);
   const [contactsError, setContactsError] = useState<string | null>(null);
@@ -1831,7 +1831,13 @@ const Sidebar: React.FC<SidebarProps> = ({
     };
   }, [showCreateCampaignModal, campaignActiveTab, hasMoreCampaignContacts, loadingCampaignContacts]);
 
-    // The auto-search functionality is now handled directly in the modal open effect above
+  // Add an effect to automatically switch to Excel tab when no contacts are available
+  useEffect(() => {
+    // If we're on contacts tab, not loading, and have no contacts, switch to Excel tab
+    if (campaignActiveTab === 'contacts' && !loadingCampaignContacts && campaignContacts.length === 0) {
+      setCampaignActiveTab('excel');
+    }
+  }, [campaignActiveTab, loadingCampaignContacts, campaignContacts.length]);
 
   return (
     <div className="flex h-full">
@@ -1927,16 +1933,19 @@ const Sidebar: React.FC<SidebarProps> = ({
                     
                     {/* Tabs */}
                     <div className="flex border-b border-gray-200 dark:border-gray-700 mb-4">
-                      <button
-                        className={`px-4 py-2 font-medium text-sm -mb-px ${
-                          campaignActiveTab === 'contacts'
-                            ? 'border-b-2 border-[#00a884] text-[#00a884]'
-                            : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
-                        }`}
-                        onClick={() => setCampaignActiveTab('contacts')}
-                      >
-                        Contacts
-                      </button>
+                      {/* Only show contacts tab if there are contacts available or still loading */}
+                      {(campaignContacts.length > 0 || loadingCampaignContacts) && (
+                        <button
+                          className={`px-4 py-2 font-medium text-sm -mb-px ${
+                            campaignActiveTab === 'contacts'
+                              ? 'border-b-2 border-[#00a884] text-[#00a884]'
+                              : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                          }`}
+                          onClick={() => setCampaignActiveTab('contacts')}
+                        >
+                          Contacts
+                        </button>
+                      )}
                       <button
                         className={`px-4 py-2 font-medium text-sm -mb-px ${
                           campaignActiveTab === 'excel'
@@ -2012,7 +2021,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                                     return;
                                   }
                                   
-                                  const phoneRegex = /^(\+?)[0-9]+$/;
+                                  // Allow numbers, +, -, and spaces during input
+                                  const phoneRegex = /^(\+?)[0-9\-\s]+$/;
                                   const isValid = phoneRegex.test(value);
                                   
                                   callback(isValid);
@@ -2021,6 +2031,71 @@ const Sidebar: React.FC<SidebarProps> = ({
                                 className: 'htPhoneCell'
                               }
                             ]}
+                            afterPaste={(data, coords) => {
+                              // Handle pasted data to ensure it's properly processed
+                              if (data && data.length > 0) {
+                                const startRow = coords[0].startRow;
+                                const updatedData = [...tableData];
+                                
+                                // Ensure we have enough rows for the pasted data
+                                const requiredRows = startRow + data.length;
+                                while (updatedData.length < requiredRows) {
+                                  updatedData.push(['', '']);
+                                }
+                                
+                                // Process each pasted row
+                                data.forEach((row, rowIndex) => {
+                                  const targetRow = startRow + rowIndex;
+                                  
+                                  // Process name column (index 0)
+                                  if (row[0] !== undefined && targetRow < updatedData.length) {
+                                    updatedData[targetRow][0] = String(row[0] || '');
+                                  }
+                                  
+                                  // Process phone column (index 1) with validation
+                                  if (row[1] !== undefined && targetRow < updatedData.length) {
+                                    let phoneValue = String(row[1] || '');
+                                    
+                                    if (phoneValue.trim()) {
+                                      // Handle scientific notation (e.g., 9.71586E+11)
+                                      if (phoneValue.includes('E') || phoneValue.includes('e')) {
+                                        try {
+                                          // Convert scientific notation to regular number
+                                          const numericValue = parseFloat(phoneValue);
+                                          if (!isNaN(numericValue)) {
+                                            phoneValue = Math.round(numericValue).toString();
+                                          }
+                                        } catch (e) {
+                                          // If conversion fails, keep original value
+                                        }
+                                      }
+                                      
+                                      // Remove dashes and spaces
+                                      let cleanedNumber = phoneValue.replace(/[-\s]/g, '');
+                                      
+                                      // Handle numbers starting with 0 - replace with +92
+                                      if (cleanedNumber.startsWith('0')) {
+                                        cleanedNumber = '+92' + cleanedNumber.substring(1);
+                                      }
+                                      // Handle numbers starting with 3 - add +92 prefix
+                                      else if (cleanedNumber.startsWith('3')) {
+                                        cleanedNumber = '+92' + cleanedNumber;
+                                      }
+                                      // Auto-add + if number doesn't start with it and has content
+                                      else if (cleanedNumber && !cleanedNumber.startsWith('+')) {
+                                        cleanedNumber = '+' + cleanedNumber;
+                                      }
+                                      
+                                      updatedData[targetRow][1] = cleanedNumber;
+                                    } else {
+                                      updatedData[targetRow][1] = '';
+                                    }
+                                  }
+                                });
+                                
+                                setTableData(updatedData);
+                              }
+                            }}
                             beforeChange={(changes, source) => {
                               if (changes && changes.length > 0) {
                                 // Type assertion to tell TypeScript this is an array
@@ -2029,8 +2104,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                                 for (const [row, prop, oldValue, newValue] of changeArray) {
                                   // For phone column (index 1), enforce phone format
                                   if (prop === 1 && typeof newValue === 'string' && newValue !== '') {
-                                    // If not valid format, reject the change
-                                    if (!/^(\+?)[0-9]*$/.test(newValue)) {
+                                    // Allow numbers, +, -, and spaces during input
+                                    if (!/^(\+?)[0-9\-\s]*$/.test(newValue)) {
                                       // Safe access with type checking
                                       if (changeArray[0] && changeArray[0].length >= 4) {
                                         changeArray[0][3] = oldValue;
@@ -2061,8 +2136,46 @@ const Sidebar: React.FC<SidebarProps> = ({
                                     while (row >= updatedData.length) {
                                       updatedData.push(['', '']);
                                     }
-                                    // Update the cell value
-                                    updatedData[row][prop as 0 | 1] = newValue;
+                                    
+                                    // For phone column (index 1), process the number
+                                    if (prop === 1 && typeof newValue === 'string' && newValue !== '') {
+                                      let phoneValue = newValue;
+                                      
+                                      // Handle scientific notation (e.g., 9.71586E+11)
+                                      if (phoneValue.includes('E') || phoneValue.includes('e')) {
+                                        try {
+                                          // Convert scientific notation to regular number
+                                          const numericValue = parseFloat(phoneValue);
+                                          if (!isNaN(numericValue)) {
+                                            phoneValue = Math.round(numericValue).toString();
+                                          }
+                                        } catch (e) {
+                                          // If conversion fails, keep original value
+                                        }
+                                      }
+                                      
+                                      // Remove dashes and spaces
+                                      let cleanedNumber = phoneValue.replace(/[-\s]/g, '');
+                                      
+                                      // Handle numbers starting with 0 - replace with +92
+                                      if (cleanedNumber.startsWith('0')) {
+                                        cleanedNumber = '+92' + cleanedNumber.substring(1);
+                                      }
+                                      // Handle numbers starting with 3 - add +92 prefix
+                                      else if (cleanedNumber.startsWith('3')) {
+                                        cleanedNumber = '+92' + cleanedNumber;
+                                      }
+                                      // Auto-add + if number doesn't start with it and has content
+                                      else if (cleanedNumber && !cleanedNumber.startsWith('+')) {
+                                        cleanedNumber = '+' + cleanedNumber;
+                                      }
+                                      
+                                      // Update the cell value with cleaned number
+                                      updatedData[row][prop as 0 | 1] = cleanedNumber;
+                                    } else {
+                                      // Update the cell value for non-phone columns
+                                      updatedData[row][prop as 0 | 1] = newValue;
+                                    }
                                   }
                                 });
                                 setTableData(updatedData);
